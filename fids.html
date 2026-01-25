@@ -1536,11 +1536,18 @@
         }else{
           cand = { phase:"CRUISE", rank:1, text:"CRUISE", cls:"good", finished:false };
         }
-      } else {
-        const finishedText = nearArr ? "LANDED" : divertText();
-        cand = { phase:"FINISHED", rank:3, text: finishedText, cls: nearArr ? "good" : "info", finished:true };
+      }  else {
+        // ON GROUND: unterscheiden zwischen DEST, ORIGIN (noch nicht departed) und DIVERT/sonstiges
+        if(nearArr){
+          cand = { phase:"FINISHED", rank:3, text:"LANDED", cls:"good", finished:true };
+        } else if(nearDep){
+          const orig = dep || depAp?.icao || "ORIGIN";
+          cand = { phase:"GATE", rank:6, text:`ON GROUND @ ${orig}`, cls:"info", finished:false };
+        } else {
+          const finishedText = divertText();
+          cand = { phase:"FINISHED", rank:3, text: finishedText, cls:"info", finished:true };
+        }
       }
-    }
 
     return stabilizeStatus(key, cand);
   }
@@ -1648,11 +1655,23 @@
     let cand = null;
 
     // finished: zeige "realistisch" die letzte Live-Aktualisierung als Zeitstempel
-    if(f.status?.finished){
+if(!f.__prefile && !f.status?.finished && phase === "GATE"){
+      const durMin = parseDurationHHMM(f.fp?.enroute_time || "");
+      if(durMin != null){
+        const base = Math.max(now, (f.stdTs ?? now)); // wenn STD schon vorbei: "Delay"-robust
+        cand = base + durMin * 60000;
+      } else {
+        cand = f.etaPlannedTs ?? null;
+      }
+
+    // finished: zeige "realistisch" die letzte Live-Aktualisierung als Zeitstempel
+    } else if(f.status?.finished){
       const lu = f.pilot?.last_updated ? new Date(f.pilot.last_updated).getTime() : null;
       cand = isFinite(lu) ? lu : (f.etaPlannedTs ?? null);
+
     } else if(f.__prefile){
       cand = f.etaPlannedTs ?? null;
+
     } else {
       // live ETA aus Distanz/Speed
       cand = computeDynamicEtaTs(f.pilot, focusAp, phase);
@@ -1714,19 +1733,13 @@
 
     if(boardType === "arr"){
       if(phase==="FINAL" || phase==="APPROACH" || phase==="DESCENT" || phase==="GOAROUND"){
-        sub = Math.floor((f.dToFocusNm ?? 9999) * 1000); // distance *1000
+        sub = Math.floor((f.dToFocusNm ?? 9999) * 1000);
+      }else if(phase==="GATE"){
+        const ts = (f.stdTs ?? null);
+        sub = ts != null ? Math.floor(ts/1000) : 9e12;
       }else{
         const ts = (f.etaTs ?? f.etaPlannedTs ?? null);
         sub = ts != null ? Math.floor(ts/1000) : 9e12;
-      }
-    } else {
-      if(phase==="GATE" || phase==="PREFILE"){
-        const ts = f.stdTs ?? null;
-        sub = ts != null ? Math.floor(ts/1000) : 9e12;
-      }else if(phase==="DEPARTING" || phase==="CLIMB"){
-        sub = Math.floor((f.dFromFocusNm ?? 9999) * 1000);
-      }else{
-        sub = Math.floor((f.dToPlanNm ?? 9999) * 1000);
       }
     }
 
