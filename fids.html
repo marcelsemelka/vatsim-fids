@@ -1,0 +1,2601 @@
+<!doctype html>
+<html lang="de">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>VATSIM FIDS (Local)</title>
+  <style>
+    :root{
+      --bg:#0b0f14;
+      --panel:#0f1620;
+      --panel2:#0c121a;
+      --text:#e7eef8;
+      --muted:#9fb0c3;
+      --line:#223246;
+      --good:#2bd576;
+      --warn:#ffd166;
+      --bad:#ff5c7c;
+      --info:#58a6ff;
+      --mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+      --sans: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, "Apple Color Emoji","Segoe UI Emoji";
+    }
+    *{ box-sizing:border-box; }
+    body{
+      margin:0;
+      background:radial-gradient(1200px 700px at 20% -10%, #122033 0%, var(--bg) 55%);
+      color:var(--text);
+      font-family:var(--sans);
+      padding-bottom: 56px;
+    }
+    header{
+      position:sticky; top:0; z-index:50;
+      background:linear-gradient(180deg, rgba(15,22,32,.98) 0%, rgba(15,22,32,.86) 100%);
+      border-bottom:1px solid var(--line);
+      backdrop-filter: blur(10px);
+    }
+    .wrap{ max-width:1400px; margin:0 auto; padding:14px 16px; }
+    .topbar{ display:flex; gap:14px; align-items:center; justify-content:space-between; }
+    .brand{ display:flex; gap:12px; align-items:baseline; flex-wrap:wrap; }
+    .brand h1{
+      margin:0;
+      font-size:18px;
+      letter-spacing:.08em;
+      text-transform:uppercase;
+      font-family:var(--mono);
+    }
+    .brand .sub{ font-size:12px; color:var(--muted); }
+    .controls{
+      display:flex; gap:10px; align-items:center; flex-wrap:wrap;
+      justify-content:flex-end;
+    }
+    label{ font-size:12px; color:var(--muted); }
+    input, select, button{
+      background:var(--panel2);
+      color:var(--text);
+      border:1px solid var(--line);
+      border-radius:10px;
+      padding:8px 10px;
+      font-size:13px;
+      outline:none;
+    }
+    input{ width:120px; font-family:var(--mono); text-transform:uppercase; }
+    select{ font-size:13px; }
+    button{
+      cursor:pointer;
+      transition: transform .06s ease, background .2s ease, border-color .2s ease;
+      font-weight:600;
+    }
+    button:hover{ border-color:#35527a; }
+    button:active{ transform: translateY(1px); }
+
+    .pill{
+      font-family:var(--mono);
+      font-size:12px;
+      padding:6px 10px;
+      border-radius:999px;
+      border:1px solid var(--line);
+      background:rgba(12,18,26,.55);
+      color:var(--muted);
+      display:inline-flex;
+      gap:8px;
+      align-items:center;
+      white-space:nowrap;
+    }
+    .pill.clockPill{
+      padding:7px 12px;
+    }
+    #utcClock{
+      font-size:16px;
+      font-weight:900;
+      letter-spacing:.08em;
+      color:#d9e6f7;
+    }
+    .dot{ width:8px; height:8px; border-radius:999px; background:var(--muted); display:inline-block; }
+    .dot.good{ background:var(--good); }
+    .dot.warn{ background:var(--warn); }
+    .dot.bad{ background:var(--bad); }
+    .dot.info{ background:var(--info); }
+
+    main .wrap{ padding-top:14px; padding-bottom:28px; }
+    .grid{
+      display:grid;
+      grid-template-columns: 1fr 1fr;
+      gap:14px;
+    }
+    @media (max-width: 1100px){
+      .grid{ grid-template-columns: 1fr; }
+    }
+
+    .board{
+      background:linear-gradient(180deg, rgba(15,22,32,.78) 0%, rgba(12,18,26,.78) 100%);
+      border:1px solid var(--line);
+      border-radius:16px;
+      overflow:hidden;
+      box-shadow: 0 10px 30px rgba(0,0,0,.35);
+      min-height: 420px;
+    }
+    .boardHeader{
+      display:flex;
+      align-items:center;
+      justify-content:space-between;
+      padding:12px 12px 10px 12px;
+      border-bottom:1px solid var(--line);
+      gap:10px;
+      flex-wrap:wrap;
+    }
+    .boardHeader h2{
+      margin:0;
+      font-size:14px;
+      letter-spacing:.12em;
+      text-transform:uppercase;
+      font-family:var(--mono);
+      color:#d9e6f7;
+    }
+    .boardHeader .mini{
+      display:flex; gap:10px; align-items:center; flex-wrap:wrap;
+    }
+    .hint{ font-size:12px; color:var(--muted); }
+
+    table{
+      width:100%;
+      border-collapse:collapse;
+      font-family:var(--mono);
+      font-size:12.5px;
+    }
+    thead th{
+      text-align:left;
+      color:var(--muted);
+      font-weight:700;
+      padding:9px 10px;
+      border-bottom:1px solid var(--line);
+      background:rgba(8,12,17,.35);
+      position:sticky;
+      top:0;
+      z-index:2;
+    }
+    tbody td{
+      padding:9px 10px;
+      border-bottom:1px solid rgba(34,50,70,.55);
+      vertical-align:middle;
+      white-space:nowrap;
+      overflow:hidden;
+      text-overflow:ellipsis;
+      max-width: 1px;
+    }
+    tbody tr{
+      transition: background .2s ease, opacity .2s ease, filter .2s ease;
+      will-change: transform;
+    }
+    tbody tr:hover{ background:rgba(88,166,255,.07); }
+    tbody tr.removing{
+      opacity:0;
+      transform: translateY(-6px);
+      transition: opacity .18s ease, transform .18s ease;
+    }
+    tbody tr.adding{
+      opacity:0;
+      transform: translateY(6px);
+    }
+
+    /* finished rows (Arrivals/Departures bottom + grey) */
+    tbody tr.finishedRow{
+      opacity: .62;
+      filter: saturate(.85);
+    }
+    tbody tr.finishedRow td{
+      color: rgba(159,176,195,.92);
+    }
+
+    .muted{ color:var(--muted); }
+    .right{ text-align:right; }
+    .center{ text-align:center; }
+
+    /* Status badge */
+    .badge{
+      display:inline-flex;
+      align-items:center;
+      gap:8px;
+      padding:4px 9px;
+      border-radius:999px;
+      border:1px solid rgba(34,50,70,.9);
+      background:rgba(8,12,17,.30);
+      font-size:12px;
+      color:var(--text);
+      max-width: 100%;
+    }
+    .badge .sDot{ width:8px; height:8px; border-radius:999px; background:var(--muted); }
+    .badge.good .sDot{ background:var(--good); }
+    .badge.warn .sDot{ background:var(--warn); }
+    .badge.bad .sDot{ background:var(--bad); }
+    .badge.info .sDot{ background:var(--info); }
+
+    /* blink on status change (until next refresh) */
+    .badge.blink{
+      animation: badgeBlink 0.95s ease-in-out infinite;
+    }
+    @keyframes badgeBlink{
+      0%   { box-shadow: 0 0 0 rgba(88,166,255,0.00); border-color: rgba(34,50,70,.9); background: rgba(8,12,17,.30); }
+      50%  { box-shadow: 0 0 0 4px rgba(88,166,255,0.14); border-color: rgba(88,166,255,.35); background: rgba(88,166,255,0.10); }
+      100% { box-shadow: 0 0 0 rgba(88,166,255,0.00); border-color: rgba(34,50,70,.9); background: rgba(8,12,17,.30); }
+    }
+
+    /* XP pill (optimized + spinner) */
+    .xpPill{
+      display:inline-flex;
+      align-items:center;
+      gap:8px;
+      padding:4px 9px;
+      border-radius:999px;
+      border:1px solid rgba(34,50,70,.9);
+      background:rgba(8,12,17,.26);
+      font-size:12px;
+      color:var(--text);
+      cursor:pointer;
+      user-select:none;
+    }
+    .xpPill .xDot{ width:8px; height:8px; border-radius:999px; background:var(--muted); display:inline-block; }
+    .xpPill.good .xDot{ background:var(--good); }
+    .xpPill.warn .xDot{ background:var(--warn); }
+    .xpPill.bad .xDot{ background:var(--bad); }
+    .xpPill.info .xDot{ background:var(--info); }
+    .xpPill .lvl{ font-weight:900; letter-spacing:.03em; }
+    .xpPill .score{ color:var(--muted); font-weight:800; }
+    .xpPill.loading{ opacity:.85; cursor:default; }
+    .xpPill .spinner{
+      width:12px; height:12px;
+      border-radius:999px;
+      border:2px solid rgba(159,176,195,.25);
+      border-top-color: rgba(159,176,195,.9);
+      animation: spin .8s linear infinite;
+    }
+    @keyframes spin{ to{ transform: rotate(360deg); } }
+
+    .tiny{ font-size:11px; color:var(--muted); }
+
+    /* Tooltip */
+    .tooltip{
+      position:fixed;
+      z-index:80;
+      pointer-events:none;
+      transform: translate(-50%, -110%);
+      background:rgba(8,12,17,.95);
+      border:1px solid rgba(34,50,70,.95);
+      border-radius:12px;
+      padding:10px 11px;
+      max-width: 360px;
+      box-shadow: 0 12px 30px rgba(0,0,0,.55);
+      color:var(--text);
+      font-family:var(--mono);
+      font-size:12px;
+      line-height:1.35;
+      white-space:pre;
+      opacity:0;
+      transition: opacity .12s ease;
+      backdrop-filter: blur(8px);
+    }
+    .tooltip.show{ opacity:1; }
+
+    /* Modal */
+    .modalOverlay{
+      position:fixed; inset:0;
+      background:rgba(0,0,0,.55);
+      display:none;
+      align-items:center;
+      justify-content:center;
+      z-index:100;
+      padding:16px;
+    }
+    .modalOverlay.show{ display:flex; }
+
+    .modal{
+      width:min(860px, 100%);
+      background:linear-gradient(180deg, rgba(15,22,32,.96) 0%, rgba(12,18,26,.96) 100%);
+      border:1px solid var(--line);
+      border-radius:18px;
+      box-shadow: 0 20px 60px rgba(0,0,0,.65);
+      overflow:hidden;
+      font-family:var(--sans);
+    }
+    .modalHead{
+      padding:14px 14px 12px 14px;
+      border-bottom:1px solid var(--line);
+      display:flex;
+      align-items:flex-start;
+      justify-content:space-between;
+      gap:10px;
+    }
+    .modalHead h3{
+      margin:0;
+      font-family:var(--mono);
+      letter-spacing:.06em;
+      font-size:14px;
+      text-transform:uppercase;
+    }
+    .modalHead .close{
+      background:rgba(12,18,26,.7);
+      border:1px solid var(--line);
+      border-radius:10px;
+      padding:8px 10px;
+      font-weight:800;
+      cursor:pointer;
+      font-family:var(--mono);
+    }
+    .modalBody{
+      padding:14px;
+      display:grid;
+      grid-template-columns: 1.15fr .85fr;
+      gap:14px;
+    }
+    @media (max-width: 900px){
+      .modalBody{ grid-template-columns: 1fr; }
+    }
+    .card{
+      background:rgba(8,12,17,.30);
+      border:1px solid rgba(34,50,70,.85);
+      border-radius:14px;
+      padding:12px;
+    }
+    .card h4{
+      margin:0 0 10px 0;
+      font-family:var(--mono);
+      font-size:12px;
+      letter-spacing:.1em;
+      text-transform:uppercase;
+      color:var(--muted);
+    }
+    .kv{
+      display:grid;
+      grid-template-columns: 160px 1fr;
+      gap:8px 10px;
+      font-family:var(--mono);
+      font-size:12.5px;
+    }
+    .kv .k{ color:var(--muted); }
+    .kv .v{ color:var(--text); overflow-wrap:anywhere; }
+    .list{
+      margin:0; padding-left:18px; color:var(--text);
+      font-family:var(--mono);
+      font-size:12.5px;
+      line-height:1.5;
+    }
+    .linkRow{
+      display:flex;
+      gap:10px;
+      flex-wrap:wrap;
+      margin-top:10px;
+    }
+    .aBtn{
+      display:inline-flex;
+      align-items:center;
+      gap:8px;
+      font-family:var(--mono);
+      font-size:12px;
+      border-radius:12px;
+      padding:8px 10px;
+      border:1px solid rgba(34,50,70,.9);
+      background:rgba(8,12,17,.30);
+      color:var(--text);
+      text-decoration:none;
+    }
+    .aBtn:hover{ border-color:#35527a; }
+
+    /* Config form */
+    .formGrid{
+      display:grid;
+      grid-template-columns: 1fr 1fr;
+      gap:10px 12px;
+    }
+    @media (max-width: 900px){
+      .formGrid{ grid-template-columns: 1fr; }
+    }
+    .field{
+      display:flex;
+      flex-direction:column;
+      gap:6px;
+      min-width: 0;
+    }
+    .field label{
+      font-family:var(--mono);
+      font-size:12px;
+      color:var(--muted);
+    }
+    .field input[type="text"], .field input[type="number"], .field select{
+      width:100%;
+      text-transform:none;
+      font-family:var(--mono);
+    }
+    .fieldRow{
+      display:flex; align-items:center; gap:10px; flex-wrap:wrap;
+      font-family:var(--mono);
+      font-size:12px;
+      color:var(--text);
+    }
+    .fieldRow input[type="checkbox"]{ width:auto; transform: translateY(1px); }
+    .btnRow{
+      display:flex; gap:10px; justify-content:flex-end; flex-wrap:wrap;
+      margin-top:12px;
+    }
+    .btnGhost{ background:rgba(8,12,17,.30); }
+    .btnPrimary{
+      border-color:#35527a;
+      background:rgba(88,166,255,.09);
+    }
+    .btnDanger{
+      border-color: rgba(255,92,124,.45);
+      background: rgba(255,92,124,.08);
+    }
+    .btnDanger:hover{ border-color: rgba(255,92,124,.75); }
+
+    /* Footer legend */
+    footer.legendBar{
+      position:fixed;
+      left:0; right:0; bottom:0;
+      z-index:60;
+      background:linear-gradient(180deg, rgba(10,14,20,.0) 0%, rgba(10,14,20,.82) 30%, rgba(10,14,20,.92) 100%);
+      border-top:1px solid rgba(34,50,70,.7);
+      backdrop-filter: blur(10px);
+    }
+    .legendInner{
+      max-width:1400px;
+      margin:0 auto;
+      padding:9px 16px;
+      display:flex;
+      gap:10px;
+      align-items:center;
+      flex-wrap:wrap;
+      color:var(--muted);
+      font-size:12px;
+      font-family:var(--mono);
+    }
+    .legendInner .legendTitle{ color:#cfe0f7; font-weight:900; letter-spacing:.06em; }
+    .legendInner .legendNote{ opacity:.85; }
+  </style>
+</head>
+<body>
+<header>
+  <div class="wrap">
+    <div class="topbar">
+      <div class="brand">
+        <h1>VATSIM FIDS</h1>
+        <div class="sub">Departure/Arrival Board (UTC) · lokal (Single-HTML)</div>
+      </div>
+
+      <div class="controls">
+        <label for="airportInput">Airport</label>
+        <input id="airportInput" value="EDDB" maxlength="4" spellcheck="false" />
+        <button id="applyAirportBtn" title="Airport sofort anwenden">Anwenden</button>
+
+        <span class="pill clockPill" title="Uhrzeit in UTC">
+          <span class="dot info"></span>
+          <span>UTC</span>
+          <span id="utcClock">--:--:--</span>
+        </span>
+
+        <span class="pill" id="feedPill" title="Status vom VATSIM-Datafeed">
+          <span class="dot" id="feedDot"></span>
+          <span id="feedText">Feed: —</span>
+          <span class="muted" id="feedAge">—</span>
+        </span>
+
+        <span class="pill" id="apiPill" title="Core API Queue / Rate Limit">
+          <span class="dot" id="apiDot"></span>
+          <span id="apiText">API Q: —</span>
+          <span class="muted" id="apiExtra">—</span>
+        </span>
+
+        <button id="configBtn" title="Einstellungen">⚙</button>
+        <button id="refreshBtn" title="Sofort neu laden">↻</button>
+      </div>
+    </div>
+  </div>
+</header>
+
+<main>
+  <div class="wrap">
+    <div class="grid">
+      <section class="board">
+        <div class="boardHeader">
+          <h2>Departures</h2>
+          <div class="mini">
+            <span class="hint">Sort:</span>
+            <select id="depSort">
+              <option value="status" selected>Status (sinnvoll)</option>
+              <option value="time">STD (deptime)</option>
+              <option value="callsign">Callsign</option>
+              <option value="dest">Destination</option>
+              <option value="xp">Pilot-Experience</option>
+            </select>
+            <button id="depDir" title="Sortierreihenfolge umkehren">▲</button>
+          </div>
+        </div>
+
+        <table>
+          <thead>
+            <tr>
+              <th style="width:70px">STD</th>
+              <th style="width:105px">Callsign</th>
+              <th style="width:135px">To</th>
+              <th>Aircraft / Route</th>
+              <th class="right" style="width:96px">ALT/GS</th>
+              <th style="width:200px">Status</th>
+              <th style="width:140px">Pilot XP</th>
+            </tr>
+          </thead>
+          <tbody id="depBody"></tbody>
+        </table>
+      </section>
+
+      <section class="board">
+        <div class="boardHeader">
+          <h2>Arrivals</h2>
+          <div class="mini">
+            <span class="hint">Sort:</span>
+            <select id="arrSort">
+              <option value="status" selected>Status (sinnvoll)</option>
+              <option value="time">ETA (heur.)</option>
+              <option value="callsign">Callsign</option>
+              <option value="orig">Origin</option>
+              <option value="xp">Pilot-Experience</option>
+            </select>
+            <button id="arrDir" title="Sortierreihenfolge umkehren">▲</button>
+          </div>
+        </div>
+
+        <table>
+          <thead>
+            <tr>
+              <th style="width:70px">ETA</th>
+              <th style="width:105px">Callsign</th>
+              <th style="width:135px">From</th>
+              <th>Aircraft / Route</th>
+              <th class="right" style="width:96px">ALT/GS</th>
+              <th style="width:200px">Status</th>
+              <th style="width:140px">Pilot XP</th>
+            </tr>
+          </thead>
+          <tbody id="arrBody"></tbody>
+        </table>
+      </section>
+    </div>
+  </div>
+</main>
+
+<div id="tooltip" class="tooltip" aria-hidden="true"></div>
+
+<!-- Pilot modal -->
+<div id="pilotModalOverlay" class="modalOverlay" role="dialog" aria-modal="true">
+  <div class="modal">
+    <div class="modalHead">
+      <div>
+        <h3 id="pilotModalTitle">Pilot-Analyse</h3>
+        <div class="tiny" id="pilotModalSubtitle">—</div>
+      </div>
+      <button class="close" id="pilotModalClose">✕</button>
+    </div>
+
+    <div class="modalBody">
+      <div class="card">
+        <h4>Flight</h4>
+        <div class="kv" id="flightKv"></div>
+      </div>
+
+      <div class="card">
+        <h4>Pilot Experience (heuristisch)</h4>
+        <div class="kv" id="xpKv"></div>
+        <div style="margin-top:10px">
+          <h4 style="margin:12px 0 8px 0">Erläuterung</h4>
+          <ul class="list" id="xpList"></ul>
+        </div>
+        <div class="linkRow" id="xpLinks"></div>
+      </div>
+
+      <div class="card" style="grid-column: 1 / -1;">
+        <h4>Sessions (optional, on demand)</h4>
+        <div class="tiny" id="historyNote">
+          Wird erst beim Öffnen des Modals abgerufen (schont Rate-Limit). Falls die API leer antwortet (trotz 200), wird automatisch erneut versucht.
+        </div>
+        <div class="kv" id="historyKv" style="margin-top:10px"></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Config modal -->
+<div id="configModalOverlay" class="modalOverlay" role="dialog" aria-modal="true">
+  <div class="modal">
+    <div class="modalHead">
+      <div>
+        <h3>Einstellungen</h3>
+        <div class="tiny">Persistiert in <span style="font-family:var(--mono)">localStorage</span></div>
+      </div>
+      <button class="close" id="configClose">✕</button>
+    </div>
+
+    <div class="modalBody" style="grid-template-columns: 1fr;">
+      <div class="card">
+        <h4>Allgemein</h4>
+        <div class="formGrid">
+          <div class="field">
+            <label for="cfgAirport">Airport (ICAO/IATA)</label>
+            <input id="cfgAirport" type="text" maxlength="4" />
+          </div>
+
+          <div class="field">
+            <label for="cfgInterval">Feed-Refresh (Sekunden)</label>
+            <input id="cfgInterval" type="number" min="5" max="120" step="1" />
+          </div>
+
+          <div class="field">
+            <label>Anzeige</label>
+            <div class="fieldRow">
+              <label class="fieldRow" style="gap:8px"><input id="cfgPrefiles" type="checkbox" /> Prefiles anzeigen</label>
+              <label class="fieldRow" style="gap:8px"><input id="cfgHideArrLanded" type="checkbox" /> Arrivals: gelandete ausblenden</label>
+              <label class="fieldRow" style="gap:8px"><input id="cfgHideDepFinished" type="checkbox" /> Departures: beendete (landed/diverted) ausblenden</label>
+            </div>
+            <div class="tiny" style="margin-top:6px">
+              Hinweis: Landed/Diverted werden (falls nicht ausgeblendet) in Arrivals &amp; Departures immer ganz unten einsortiert und leicht ausgegraut.
+            </div>
+          </div>
+
+          <div class="field">
+            <label for="cfgXpHydrate">XP: Max. CIDs pro Refresh (sichtbar)</label>
+            <input id="cfgXpHydrate" type="number" min="10" max="120" step="5" />
+            <div class="tiny">Reduziert API-Last &amp; Rate-Limit-Risiko.</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="card">
+        <h4>Pilot XP Ranges (Score 0–100)</h4>
+        <div class="formGrid">
+          <div class="field">
+            <label for="cfgT1">Neu: 0 – (exkl.)</label>
+            <input id="cfgT1" type="number" min="1" max="99" step="1" />
+          </div>
+          <div class="field">
+            <label for="cfgT2">Einsteiger: ab T1 – (exkl.)</label>
+            <input id="cfgT2" type="number" min="2" max="100" step="1" />
+          </div>
+          <div class="field">
+            <label for="cfgT3">Fortgeschritten: ab T2 – (exkl.)</label>
+            <input id="cfgT3" type="number" min="3" max="100" step="1" />
+          </div>
+          <div class="field">
+            <label for="cfgT4">Erfahren: ab T3 – (exkl.)</label>
+            <input id="cfgT4" type="number" min="4" max="100" step="1" />
+          </div>
+        </div>
+        <div class="tiny" style="margin-top:10px">
+          Veteran ist automatisch: ab T4 – 100. (Beispiel Default: 20/40/60/80)
+        </div>
+
+        <div class="btnRow">
+          <button id="cfgResetCache" class="btnDanger" type="button" title="Löscht den lokalen Member-Stats Cache">Reset Cache</button>
+          <button id="cfgDefaults" class="btnGhost" type="button">Defaults</button>
+          <button id="cfgCancel" class="btnGhost" type="button">Abbrechen</button>
+          <button id="cfgSave" class="btnPrimary" type="button">Speichern &amp; Anwenden</button>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<footer class="legendBar" aria-hidden="true">
+  <div class="legendInner" id="legendInner"></div>
+</footer>
+
+<script>
+(() => {
+  /********************
+   * Endpoints / Daten
+   ********************/
+  const VATSIM_DATA_URL = "https://data.vatsim.net/v3/vatsim-data.json"; // groß -> KEIN corsproxy davor
+  const CORE_API_BASE = "https://api.vatsim.net/v2";
+  const CORS_PROXY = "https://corsproxy.io/?url="; // nur für Core-API
+  const AIRPORTS_URL = "https://cdn.jsdelivr.net/npm/airport-data@1.0.1/airports.json";
+
+  /********************
+   * Persistenz
+   ********************/
+  const SETTINGS_KEY = "vatsimFids_settings_v4";
+  const MEMBER_CACHE_KEY = "vatsimFids_memberCache_v2";
+  const API_LAST_REQ_KEY = "vatsimFids_apiLastReqMs_v1";
+
+  const DEFAULTS = {
+    airportInput: "EDDB",
+    feedIntervalMs: 15000,
+    showPrefiles: false,
+    hideArrivalsLanded: false,
+    hideDeparturesFinished: false,
+    xpHydrateMax: 40,
+    depSort: { by:"status", dir: 1 },
+    arrSort: { by:"status", dir: 1 },
+    memberTtlStatsMs: 7 * 24 * 3600 * 1000,
+    memberTtlDetailsMs: 30 * 24 * 3600 * 1000,
+    xpThresholds: { t1:20, t2:40, t3:60, t4:80 }
+  };
+
+  function loadSettings(){
+    try{
+      const raw = localStorage.getItem(SETTINGS_KEY);
+      if(!raw) return structuredClone(DEFAULTS);
+      const s = JSON.parse(raw);
+      const merged = { ...structuredClone(DEFAULTS), ...s };
+      merged.depSort = { ...DEFAULTS.depSort, ...(s.depSort||{}) };
+      merged.arrSort = { ...DEFAULTS.arrSort, ...(s.arrSort||{}) };
+      merged.xpThresholds = { ...DEFAULTS.xpThresholds, ...(s.xpThresholds||{}) };
+      return merged;
+    }catch{
+      return structuredClone(DEFAULTS);
+    }
+  }
+  function saveSettings(){ localStorage.setItem(SETTINGS_KEY, JSON.stringify(settings)); }
+
+  function loadMemberCache(){
+    try{ return JSON.parse(localStorage.getItem(MEMBER_CACHE_KEY) || "{}"); }
+    catch{ return {}; }
+  }
+  function saveMemberCache(){
+    const entries = Object.entries(memberCache);
+    if(entries.length > 900){
+      entries.sort((a,b) => (a[1].t || 0) - (b[1].t || 0));
+      for(let i=0;i<entries.length-900;i++) delete memberCache[entries[i][0]];
+    }
+    localStorage.setItem(MEMBER_CACHE_KEY, JSON.stringify(memberCache));
+  }
+
+  let settings = loadSettings();
+  let memberCache = loadMemberCache();
+
+  /********************
+   * UI Hooks
+   ********************/
+  const airportInputEl = document.getElementById("airportInput");
+  const applyAirportBtn = document.getElementById("applyAirportBtn");
+  const refreshBtn = document.getElementById("refreshBtn");
+  const configBtn = document.getElementById("configBtn");
+  const utcClockEl = document.getElementById("utcClock");
+
+  const feedDot = document.getElementById("feedDot");
+  const feedText = document.getElementById("feedText");
+  const feedAge = document.getElementById("feedAge");
+
+  const apiDot = document.getElementById("apiDot");
+  const apiText = document.getElementById("apiText");
+  const apiExtra = document.getElementById("apiExtra");
+
+  const depBody = document.getElementById("depBody");
+  const arrBody = document.getElementById("arrBody");
+  const depSortEl = document.getElementById("depSort");
+  const depDirBtn = document.getElementById("depDir");
+  const arrSortEl = document.getElementById("arrSort");
+  const arrDirBtn = document.getElementById("arrDir");
+
+  const tooltip = document.getElementById("tooltip");
+  const legendInner = document.getElementById("legendInner");
+
+  // Pilot modal
+  const pilotModalOverlay = document.getElementById("pilotModalOverlay");
+  const pilotModalClose = document.getElementById("pilotModalClose");
+  const pilotModalTitle = document.getElementById("pilotModalTitle");
+  const pilotModalSubtitle = document.getElementById("pilotModalSubtitle");
+  const flightKv = document.getElementById("flightKv");
+  const xpKv = document.getElementById("xpKv");
+  const xpList = document.getElementById("xpList");
+  const xpLinks = document.getElementById("xpLinks");
+  const historyKv = document.getElementById("historyKv");
+
+  // Config modal
+  const configModalOverlay = document.getElementById("configModalOverlay");
+  const configClose = document.getElementById("configClose");
+  const cfgAirport = document.getElementById("cfgAirport");
+  const cfgInterval = document.getElementById("cfgInterval");
+  const cfgPrefiles = document.getElementById("cfgPrefiles");
+  const cfgHideArrLanded = document.getElementById("cfgHideArrLanded");
+  const cfgHideDepFinished = document.getElementById("cfgHideDepFinished");
+  const cfgXpHydrate = document.getElementById("cfgXpHydrate");
+  const cfgT1 = document.getElementById("cfgT1");
+  const cfgT2 = document.getElementById("cfgT2");
+  const cfgT3 = document.getElementById("cfgT3");
+  const cfgT4 = document.getElementById("cfgT4");
+  const cfgDefaults = document.getElementById("cfgDefaults");
+  const cfgCancel = document.getElementById("cfgCancel");
+  const cfgSave = document.getElementById("cfgSave");
+  const cfgResetCache = document.getElementById("cfgResetCache");
+
+  /********************
+   * Airport Index
+   ********************/
+  const airportIndex = {
+    ready:false,
+    byIcao: new Map(),
+    byIata: new Map(),
+    grid: new Map()
+  };
+  function gridKey(lat, lon){ return `${Math.floor(lat)},${Math.floor(lon)}`; }
+  function gridAdd(ap){
+    const key = gridKey(ap.latitude, ap.longitude);
+    if(!airportIndex.grid.has(key)) airportIndex.grid.set(key, []);
+    airportIndex.grid.get(key).push(ap);
+  }
+  function normalizeCode(s){ return (s||"").trim().toUpperCase(); }
+
+  async function ensureAirportIndex(){
+    if(airportIndex.ready) return true;
+    try{
+      const res = await fetch(AIRPORTS_URL, { cache:"force-cache" });
+      if(!res.ok) throw new Error(`airports.json HTTP ${res.status}`);
+      const data = await res.json();
+      for(const a of data){
+        if(!a || !a.icao || !a.latitude || !a.longitude) continue;
+        const icao = normalizeCode(a.icao);
+        const iata = normalizeCode(a.iata);
+        const ap = { icao, iata: iata || "", latitude:Number(a.latitude), longitude:Number(a.longitude) };
+        airportIndex.byIcao.set(icao, ap);
+        if(iata && !airportIndex.byIata.has(iata)) airportIndex.byIata.set(iata, icao);
+        gridAdd(ap);
+      }
+      airportIndex.ready = true;
+      return true;
+    }catch(err){
+      console.warn("Airport DB load failed:", err);
+      const ap = { icao:"EDDB", iata:"BER", latitude:52.3667, longitude:13.5033 };
+      airportIndex.byIcao.set("EDDB", ap);
+      airportIndex.byIata.set("BER", "EDDB");
+      gridAdd(ap);
+      airportIndex.ready = true;
+      return false;
+    }
+  }
+  function resolveAirportToIcao(code){
+    const c = normalizeCode(code);
+    if(c.length === 3) return airportIndex.byIata.get(c) || c;
+    return c;
+  }
+  function getAirport(icaoOrIata){
+    const icao = resolveAirportToIcao(icaoOrIata);
+    return airportIndex.byIcao.get(icao) || null;
+  }
+  function haversineNm(lat1, lon1, lat2, lon2){
+    const R_km = 6371;
+    const toRad = d => d * Math.PI / 180;
+    const dLat = toRad(lat2-lat1);
+    const dLon = toRad(lon2-lon1);
+    const a =
+      Math.sin(dLat/2)**2 +
+      Math.cos(toRad(lat1))*Math.cos(toRad(lat2))*Math.sin(dLon/2)**2;
+    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+    const km = R_km * c;
+    return km * 0.5399568;
+  }
+  function findNearestAirport(lat, lon, maxNm=10){
+    const latB = Math.floor(lat);
+    const lonB = Math.floor(lon);
+    let best = null, bestD = Infinity;
+    const maxR = 4;
+    for(let r=0;r<=maxR;r++){
+      for(let dy=-r; dy<=r; dy++){
+        for(let dx=-r; dx<=r; dx++){
+          if(Math.abs(dx)!==r && Math.abs(dy)!==r) continue;
+          const key = `${latB+dy},${lonB+dx}`;
+          const bucket = airportIndex.grid.get(key);
+          if(!bucket) continue;
+          for(const ap of bucket){
+            const d = haversineNm(lat, lon, ap.latitude, ap.longitude);
+            if(d < bestD){ bestD = d; best = ap; }
+          }
+        }
+      }
+      if(best && bestD <= maxNm) break;
+    }
+    if(best && bestD <= maxNm) return { ap: best, nm: bestD };
+    return null;
+  }
+
+  /********************
+   * Core API Rate Limiter (+ queue status)
+   ********************/
+  class RateLimiter {
+    constructor({minIntervalMs=6100}={}){
+      this.minIntervalMs = minIntervalMs;
+      this.queue = [];
+      this.running = false;
+      const last = Number(localStorage.getItem(API_LAST_REQ_KEY) || "0");
+      this.lastRequestAt = isFinite(last) ? last : 0;
+      this.backoffUntil = 0;
+      this.inFlight = 0;
+    }
+    enqueue(fn){
+      return new Promise((resolve, reject) => {
+        this.queue.push({ fn, resolve, reject });
+        this.pump();
+      });
+    }
+    async pump(){
+      if(this.running) return;
+      this.running = true;
+      while(this.queue.length){
+        const now = Date.now();
+        const waitForBackoff = Math.max(0, this.backoffUntil - now);
+        const waitForInterval = Math.max(0, (this.lastRequestAt + this.minIntervalMs) - now);
+        const waitMs = Math.max(waitForBackoff, waitForInterval);
+        if(waitMs > 0) await new Promise(r => setTimeout(r, waitMs));
+
+        const item = this.queue.shift();
+        this.inFlight = 1;
+        try{
+          const res = await item.fn();
+          this.lastRequestAt = Date.now();
+          localStorage.setItem(API_LAST_REQ_KEY, String(this.lastRequestAt));
+          item.resolve(res);
+        }catch(e){
+          if(e && e.__rateLimited) this.backoffUntil = Date.now() + 60000;
+          item.reject(e);
+        }finally{
+          this.inFlight = 0;
+        }
+      }
+      this.running = false;
+    }
+  }
+  const limiter = new RateLimiter({ minIntervalMs: 6100 });
+
+  async function fetchJsonPossiblyEmpty(url, { useProxy=false, retryEmpty=3, retryDelayMs=800 } = {}){
+    const finalUrl = useProxy ? (CORS_PROXY + encodeURIComponent(url)) : url;
+
+    const runOnce = async () => {
+      const res = await fetch(finalUrl, { cache:"no-store" });
+      if(res.status === 429){
+        const err = new Error("Rate limited (429)");
+        err.__rateLimited = true;
+        throw err;
+      }
+      const text = await res.text();
+      if(res.ok && (!text || !text.trim())) return { __empty:true, __status: res.status };
+      if(!res.ok) throw new Error(`HTTP ${res.status}: ${text?.slice(0,120) || ""}`);
+      return JSON.parse(text);
+    };
+
+    for(let attempt=1; attempt<=retryEmpty; attempt++){
+      const out = useProxy ? await limiter.enqueue(runOnce) : await runOnce();
+      if(out && out.__empty){
+        await new Promise(r => setTimeout(r, retryDelayMs * attempt));
+        continue;
+      }
+      return out;
+    }
+    throw new Error("API returned empty body repeatedly.");
+  }
+
+  function updateApiQueuePill(){
+    const q = limiter.queue.length;
+    const now = Date.now();
+    const backoff = limiter.backoffUntil && limiter.backoffUntil > now;
+    const inflight = limiter.inFlight || 0;
+
+    apiDot.className = "dot " + (backoff ? "bad" : (q>0 || inflight) ? "warn" : "good");
+    apiText.textContent = `API Q: ${q}`;
+
+    if(backoff){
+      apiExtra.textContent = `${Math.ceil((limiter.backoffUntil-now)/1000)}s`;
+    }else if(inflight){
+      apiExtra.textContent = "RUN";
+    }else{
+      apiExtra.textContent = "OK";
+    }
+  }
+  setInterval(updateApiQueuePill, 250);
+
+  /********************
+   * Member Cache + API
+   ********************/
+  function getCacheEntry(cid){ return memberCache[String(cid)] || null; }
+  function upsertCacheEntry(cid, patch){
+    const key = String(cid);
+    const cur = memberCache[key] || {};
+    memberCache[key] = { ...cur, ...patch, t: Date.now() };
+    saveMemberCache();
+  }
+  function isFresh(ts, ttlMs){ return ts && (Date.now() - ts) < ttlMs; }
+
+  async function getMemberDetails(cid){
+    const entry = getCacheEntry(cid);
+    if(entry?.details && isFresh(entry.detailsTs, settings.memberTtlDetailsMs)) return entry.details;
+    const url = `${CORE_API_BASE}/members/${cid}`;
+    const details = await fetchJsonPossiblyEmpty(url, { useProxy:true, retryEmpty:4 });
+    upsertCacheEntry(cid, { details, detailsTs: Date.now() });
+    return details;
+  }
+  async function getMemberStats(cid){
+    const entry = getCacheEntry(cid);
+    if(entry?.stats && isFresh(entry.statsTs, settings.memberTtlStatsMs)) return entry.stats;
+    const url = `${CORE_API_BASE}/members/${cid}/stats`;
+    const stats = await fetchJsonPossiblyEmpty(url, { useProxy:true, retryEmpty:5 });
+    upsertCacheEntry(cid, { stats, statsTs: Date.now() });
+    return stats;
+  }
+  async function getMemberHistory(cid, {limit=20} = {}){
+    const entry = getCacheEntry(cid);
+    const ttl = 24 * 3600 * 1000;
+    if(entry?.history && isFresh(entry.historyTs, ttl)) return entry.history;
+    const url = `${CORE_API_BASE}/members/${cid}/history?limit=${encodeURIComponent(limit)}&offset=0`;
+    const history = await fetchJsonPossiblyEmpty(url, { useProxy:true, retryEmpty:4 });
+    upsertCacheEntry(cid, { history, historyTs: Date.now() });
+    return history;
+  }
+
+  /********************
+   * XP
+   ********************/
+  const atcWeights = {
+    s1:1.00, s2:1.05, s3:1.10,
+    c1:1.15, c2:1.20, c3:1.25,
+    i1:1.30, i2:1.35, i3:1.40,
+    sup:1.45, adm:1.50
+  };
+  
+  const XP_HOURS_CAP = 20000;        // war implizit 6000
+  const PILOT_HOURS_FACTOR = 0.85;   // Pilotstunden zählen etwas weniger als 1:1
+  // Account-Alter Bonus (neu): deutlich schwächer + an Aktivität gekoppelt
+  const AGE_BONUS_MAX = 120;            // vorher effektiv bis 250 -> deutlich reduzieren
+  const AGE_BONUS_CAP_YEARS = 10;       // nach ~10 Jahren weitgehend "ausgereizt"
+  const AGE_BONUS_MIN_HOURS = 30;       // unter 30h Gesamtzeit: praktisch kein Altersbonus
+  const AGE_BONUS_FULL_HOURS = 200;     // ab ~200h Gesamtzeit: voller Altersbonus möglich
+  const AGE_BONUS_MIN_HPY = 6;          // <6h/Jahr: Altersbonus stark reduziert
+  const AGE_BONUS_FULL_HPY = 30;        // ab ~30h/Jahr: Dichte-Faktor ~1
+  const AGE_BONUS_DOMINANCE = 0.35;     // Altersbonus darf max. ~35% der gew. Stunden "dominieren"
+  const AGE_BONUS_EXTRA_CAP = 15;       // kleiner Puffer, damit Bonus bei wenig Stunden nicht komplett 0 bleibt (wenn Faktoren >0)
+
+  function clamp01(x){ return Math.max(0, Math.min(1, x)); }
+  function smoothstep(edge0, edge1, x){
+    if(edge1 <= edge0) return x >= edge1 ? 1 : 0;
+    const t = clamp01((x - edge0) / (edge1 - edge0));
+    return t * t * (3 - 2 * t);
+  }
+  function fmtHours(h){
+    if(h == null || !isFinite(h)) return "—";
+    if(h < 10) return `${h.toFixed(2)}h`;
+    if(h < 100) return `${h.toFixed(1)}h`;
+    return `${Math.round(h)}h`;
+  }
+  function fmtDateUtc(iso){
+    try{
+      const d = new Date(iso);
+      if(!isFinite(d)) return "—";
+      const y = d.getUTCFullYear();
+      const m = String(d.getUTCMonth()+1).padStart(2,"0");
+      const da = String(d.getUTCDate()).padStart(2,"0");
+      return `${y}-${m}-${da}`;
+    }catch{ return "—"; }
+  }
+  function xpLabelShort(label){
+    if(label === "Neu") return "Neu";
+    if(label === "Einsteiger") return "Einst.";
+    if(label === "Fortgeschritten") return "Fortg.";
+    if(label === "Erfahren") return "Erf.";
+    if(label === "Veteran") return "Vet.";
+    return label || "—";
+  }
+  function clampInt(x, lo, hi){
+    const n = Number(x);
+    if(!isFinite(n)) return lo;
+    return Math.max(lo, Math.min(hi, Math.round(n)));
+  }
+  function normalizedThresholds(th){
+    let t1 = clampInt(th?.t1 ?? 20, 1, 99);
+    let t2 = clampInt(th?.t2 ?? 40, 2, 100);
+    let t3 = clampInt(th?.t3 ?? 60, 3, 100);
+    let t4 = clampInt(th?.t4 ?? 80, 4, 100);
+    t2 = Math.max(t2, t1+1);
+    t3 = Math.max(t3, t2+1);
+    t4 = Math.max(t4, t3+1);
+    t4 = Math.min(t4, 100);
+    t3 = Math.min(t3, t4-1);
+    t2 = Math.min(t2, t3-1);
+    t1 = Math.min(t1, t2-1);
+    return { t1,t2,t3,t4 };
+  }
+  function labelFromScore(score){
+    const {t1,t2,t3,t4} = normalizedThresholds(settings.xpThresholds);
+    if(score < t1) return { label:"Neu", cls:"bad" };
+    if(score < t2) return { label:"Einsteiger", cls:"warn" };
+    if(score < t3) return { label:"Fortgeschritten", cls:"info" };
+    if(score < t4) return { label:"Erfahren", cls:"good" };
+    return { label:"Veteran", cls:"good" };
+  }
+  function computeExperience(details, stats){
+    if(!details || !stats){
+      return { label:"—", short:"—", cls:"info", score:null, atcWeighted:null, reasons:["Daten werden geladen oder sind nicht verfügbar."] };
+    }
+     const pilot = Number(stats.pilot || 0);
+    const atc = Number(stats.atc || 0);
+
+    let atcWeighted = 0;
+    for(const [k,w] of Object.entries(atcWeights)){
+      atcWeighted += Number(stats[k] || 0) * w;
+    }
+
+    const atcBonusFactor = 1.20;
+
+    // Pilotstunden leicht “abgewertet”, ATC wie gehabt (plus Bonusfaktor)
+    const totalWeightedHours =
+      (pilot * PILOT_HOURS_FACTOR) +
+      (atcWeighted * atcBonusFactor);
+	  
+    let ageDays = null;
+    try{
+      const reg = new Date(details.reg_date);
+      if(isFinite(reg)) ageDays = (Date.now() - reg.getTime()) / 86400000;
+    }catch{}
+
+        const totalOnlineHours = pilot + atc; // bewusst ungewichtet: "echte" Gesamtaktivität
+
+    const ageYears = (ageDays && ageDays > 0) ? (ageDays / 365.25) : null;
+
+    const baseAgeBonus = (ageDays && ageDays > 0)
+      ? Math.min(
+          AGE_BONUS_MAX,
+          (Math.log1p(ageDays) / Math.log(1 + (AGE_BONUS_CAP_YEARS * 365))) * AGE_BONUS_MAX
+        )
+      : 0;
+
+    const activityFactor = smoothstep(AGE_BONUS_MIN_HOURS, AGE_BONUS_FULL_HOURS, totalOnlineHours);
+
+    const hoursPerYear = (ageYears && isFinite(ageYears) && ageYears > 0)
+      ? (totalOnlineHours / Math.max(0.25, ageYears))
+      : 0;
+
+    const densityFactor = smoothstep(AGE_BONUS_MIN_HPY, AGE_BONUS_FULL_HPY, hoursPerYear);
+
+    // Bonus wird zusätzlich gedeckelt, damit Alter nie die Stunden "überstimmt"
+    const dominanceCap = (totalWeightedHours * AGE_BONUS_DOMINANCE) + AGE_BONUS_EXTRA_CAP;
+
+    const ageBonus = Math.max(0, Math.min(baseAgeBonus * activityFactor * densityFactor, dominanceCap));
+
+    const raw = totalWeightedHours + ageBonus;
+    const score = Math.max(0, Math.min(100,
+      Math.round((Math.log1p(raw) / Math.log(1 + XP_HOURS_CAP)) * 100)
+    ));
+    const mapped = labelFromScore(score);
+
+    const reasons = [];
+        reasons.push(`Pilot-Zeit: ${fmtHours(pilot)} (Faktor ${PILOT_HOURS_FACTOR.toFixed(2)}).`);
+    reasons.push(`ATC-Zeit: ${fmtHours(atc)} (mit Rating-Gewichtung: ${fmtHours(atcWeighted)}; Bonusfaktor ${atcBonusFactor.toFixed(2)}).`);
+    if(ageDays != null){
+      const years = (ageDays/365.25);
+      reasons.push(`Registriert seit: ${fmtDateUtc(details.reg_date)} (~${years.toFixed(1)} Jahre).`);
+	   // Transparenz zum Altersbonus
+    reasons.push(
+      `Account-Alter Bonus: ${ageBonus.toFixed(1)} (Basis ${baseAgeBonus.toFixed(1)} · Aktivität ${Math.round(activityFactor*100)}% · Dichte ${Math.round(densityFactor*100)}% · ~${hoursPerYear.toFixed(1)}h/Jahr).`
+    );
+    if(totalOnlineHours < AGE_BONUS_MIN_HOURS){
+      reasons.push(`Hinweis: Unter ${AGE_BONUS_MIN_HOURS}h Gesamtzeit wird der Altersbonus praktisch nicht vergeben.`);
+    }else if(hoursPerYear < AGE_BONUS_MIN_HPY){
+      reasons.push(`Hinweis: Sehr geringe Aktivität pro Jahr reduziert den Altersbonus stark.`);
+    }
+    }else{
+      reasons.push("Registrierungsdatum nicht verfügbar.");
+    }
+    if(atc > 0) reasons.push("Hinweis: ATC-Erfahrung wird stärker gewichtet (Ausbildung/Prozeduren).");
+
+    return { label:mapped.label, short: xpLabelShort(mapped.label), cls:mapped.cls, score, atcWeighted, reasons };
+  }
+  function experienceTooltipText(details, stats, exp){
+    const lines = [];
+    lines.push(`CID: ${details?.id ?? "—"} · Score: ${exp?.score ?? "—"} · ${exp?.label ?? ""}`);
+    lines.push(`Reg: ${details?.reg_date ? fmtDateUtc(details.reg_date) : "—"}`);
+    if(stats){
+      lines.push(`Pilot: ${fmtHours(stats.pilot)} · ATC: ${fmtHours(stats.atc)}`);
+      lines.push(`ATC (gewichtet): ${fmtHours(exp.atcWeighted)}`);
+      const parts = [];
+      for(const k of Object.keys(atcWeights)){
+        const v = Number(stats[k] || 0);
+        if(v > 0.01) parts.push(`${k.toUpperCase()}:${fmtHours(v)}`);
+      }
+      if(parts.length) lines.push(`ATC-Ratings: ${parts.slice(0,6).join("  ")}${parts.length>6 ? " …" : ""}`);
+    }else{
+      lines.push("Stats: —");
+    }
+    return lines.join("\n");
+  }
+  function rebuildLegend(){
+    const {t1,t2,t3,t4} = normalizedThresholds(settings.xpThresholds);
+    legendInner.innerHTML = `
+      <span class="legendTitle">Pilot XP</span>
+      <span class="xpPill bad" style="cursor:default"><span class="xDot"></span><span class="lvl">Neu</span><span class="score">0–${t1-1}</span></span>
+      <span class="xpPill warn" style="cursor:default"><span class="xDot"></span><span class="lvl">Einst.</span><span class="score">${t1}–${t2-1}</span></span>
+      <span class="xpPill info" style="cursor:default"><span class="xDot"></span><span class="lvl">Fortg.</span><span class="score">${t2}–${t3-1}</span></span>
+      <span class="xpPill good" style="cursor:default"><span class="xDot"></span><span class="lvl">Erf.</span><span class="score">${t3}–${t4-1}</span></span>
+      <span class="xpPill good" style="cursor:default"><span class="xDot"></span><span class="lvl">Vet.</span><span class="score">${t4}–100</span></span>
+      <span class="legendNote">Heuristik: Reg.-Datum + Pilot/ATC-Stunden (ATC & Ratings höher gewichtet). Hover für Breakdown, Klick für Details.</span>
+    `;
+  }
+
+  /********************
+   * FIDS helpers (Zeit/ETA robust in UTC)
+   ********************/
+  const DAY_MS = 24 * 3600 * 1000;
+
+  function parseClockHHMM(s){
+    const t = (s||"").trim();
+    if(!/^\d{4}$/.test(t)) return null;
+    const hh = Number(t.slice(0,2));
+    const mm = Number(t.slice(2,4));
+    if(hh>23 || mm>59) return null;
+    return hh*60 + mm; // minutes-of-day
+  }
+
+  // EET/Dauer: HHMM (HH darf >23 sein)
+  function parseDurationHHMM(s){
+    const t = (s||"").trim();
+    if(!/^\d{4}$/.test(t)) return null;
+    const hh = Number(t.slice(0,2));
+    const mm = Number(t.slice(2,4));
+    if(mm>59) return null;
+    return hh*60 + mm; // minutes duration
+  }
+
+  function utcDayStartMs(refMs=Date.now()){
+    const d = new Date(refMs);
+    return Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate());
+  }
+
+  // wähle denselben HH:MM Slot am “nächsten” Tag (±12h) relativ zu refMs
+  function clockMinToTsNear(refMinOfDay, refMs=Date.now()){
+    if(refMinOfDay == null) return null;
+    const base = utcDayStartMs(refMs);
+    let ts = base + refMinOfDay * 60000;
+    const diff = ts - refMs;
+    if(diff < -12*3600*1000) ts += DAY_MS;
+    else if(diff > 12*3600*1000) ts -= DAY_MS;
+    return ts;
+  }
+
+  // gleiche Uhrzeit, aber niemals “zu weit” in der Vergangenheit (z.B. STD lieber nächste Instanz)
+  function clockMinToTsNearFuture(refMinOfDay, refMs=Date.now(), maxPastMin=180){
+    let ts = clockMinToTsNear(refMinOfDay, refMs);
+    if(ts == null) return null;
+    if(ts < refMs - maxPastMin*60000) ts += DAY_MS;
+    return ts;
+  }
+
+  function plannedStdTs(deptimeHHMM, refMs=Date.now()){
+    const m = parseClockHHMM(deptimeHHMM);
+    return m == null ? null : clockMinToTsNearFuture(m, refMs, 240);
+  }
+
+  function plannedEtaTs(stdTs, enrouteHHMM){
+    const durMin = parseDurationHHMM(enrouteHHMM);
+    if(stdTs == null || durMin == null) return null;
+    return stdTs + durMin*60000;
+  }
+
+  function fmtHHMMFromTs(ts){
+    if(ts == null || !isFinite(ts)) return "—";
+    return new Date(ts).toISOString().slice(11,16); // HH:MM UTC
+  }
+
+  function altGsText(p){
+    const alt = (p.altitude ?? null);
+    const gs = (p.groundspeed ?? null);
+    const a = (alt != null) ? String(Math.round(alt)).padStart(5," ") : "  —  ";
+    const g = (gs != null) ? String(Math.round(gs)).padStart(3," ") : "—";
+    return `${a} / ${g}`;
+  }
+
+  function escapeHtml(s){
+    return String(s ?? "").replace(/[&<>"']/g, (c) => ({
+      "&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"
+    }[c]));
+  }
+
+
+  /**  /********************
+   * Status (stabilisiert: Hysterese + Debounce + Dwell)
+   ********************/
+  let prevPilotStates = new Map(); // cid -> {alt, lat, lon, t}
+
+  // pro Flug (boardType:cid) merken wir den zuletzt "stabilen" Status
+  let statusMemory = new Map(); // key -> {status, sig, lastChange, lastSeen, pendSig, pendCount}
+
+  const STATUS_BANDS = {
+    NEAR_APT_NM: 7,
+    APPROACH_ENTER_NM: 55,
+    APPROACH_EXIT_NM: 82,
+    FINAL_ENTER_NM: 10,
+    FINAL_EXIT_NM: 18,
+    DEPAREA_ENTER_NM: 45,
+    DEPAREA_EXIT_NM: 70
+  };
+
+  function computeVerticalRateFpm(prev, curAlt, curT){
+    if(!prev || prev.alt == null || prev.t == null) return null;
+    const dt = (curT - prev.t) / 1000;
+    if(!isFinite(dt) || dt <= 2) return null;
+    const dAlt = Number(curAlt) - Number(prev.alt);
+    return (dAlt / dt) * 60;
+  }
+
+  function statusKey(cid, boardType){ return `${boardType}:${String(cid)}`; }
+
+  function stabilizeStatus(key, candidate){
+    const now = Date.now();
+    const sig = `${candidate.phase}|${candidate.rank}|${candidate.text}|${candidate.cls}|${candidate.finished?1:0}`;
+    const dwellMs = Math.max(9000, Math.min(45000, Math.round((settings.feedIntervalMs || 15000) * 0.9)));
+    const confirmN = 2; // gleiche Kandidatenlage muss 2× kommen (reduziert Flattern)
+
+    let mem = statusMemory.get(key);
+    if(!mem){
+      mem = { status: candidate, sig, lastChange: now, lastSeen: now, pendSig: null, pendCount: 0 };
+      statusMemory.set(key, mem);
+      return candidate;
+    }
+
+    mem.lastSeen = now;
+
+    // gleich -> stabil
+    if(sig === mem.sig){
+      mem.pendSig = null;
+      mem.pendCount = 0;
+      return mem.status;
+    }
+
+    // “harte” Übergänge: Finished/Unfinished sofort übernehmen
+    if(candidate.finished || mem.status.finished){
+      mem.status = candidate;
+      mem.sig = sig;
+      mem.lastChange = now;
+      mem.pendSig = null;
+      mem.pendCount = 0;
+      return candidate;
+    }
+
+    // Mindest-Verweildauer: innerhalb dwellMs nur wechseln, wenn Kandidat deutlich “stärker” ist (z.B. FINAL/APPROACH)
+    const withinDwell = (now - mem.lastChange) < dwellMs;
+    const strongerChange = candidate.rank < mem.status.rank; // z.B. CRUISE -> APPROACH
+    if(withinDwell && !strongerChange){
+      return mem.status;
+    }
+
+    // Debounce: Kandidat muss mehrfach hintereinander kommen
+    if(mem.pendSig === sig) mem.pendCount++;
+    else { mem.pendSig = sig; mem.pendCount = 1; }
+
+    // Bei “starkem” Wechsel reichen ggf. 1 Bestätigung, sonst 2
+    const need = strongerChange ? 1 : confirmN;
+    if(mem.pendCount >= need){
+      mem.status = candidate;
+      mem.sig = sig;
+      mem.lastChange = now;
+      mem.pendSig = null;
+      mem.pendCount = 0;
+      return candidate;
+    }
+
+    return mem.status;
+  }
+
+  function pruneStatusMemory(){
+    const now = Date.now();
+    const ttl = 20 * 60 * 1000; // 20 min
+    for(const [k,v] of statusMemory.entries()){
+      if(!v?.lastSeen || (now - v.lastSeen) > ttl) statusMemory.delete(k);
+    }
+  }
+
+  function classifyFlight(p, boardType){
+    const fp = p.flight_plan;
+    const dep = normalizeCode(fp?.departure || "");
+    const arr = normalizeCode(fp?.arrival || "");
+
+    const depAp = getAirport(dep);
+    const arrAp = getAirport(arr);
+
+    const lat = Number(p.latitude);
+    const lon = Number(p.longitude);
+    const alt = Number(p.altitude || 0);
+    const gs  = Number(p.groundspeed || 0);
+
+    const nowT = Date.now();
+    const prev = prevPilotStates.get(String(p.cid));
+    const vr = computeVerticalRateFpm(prev, alt, nowT);
+    const absVr = (vr == null) ? null : Math.abs(vr);
+
+    const climbing  = (vr != null && vr > 350);
+    const descending = (vr != null && vr < -350);
+
+    const onGround = (gs < 35 && alt < 1400);
+    const airborne = !onGround;
+
+    const dDep = (depAp ? haversineNm(lat, lon, depAp.latitude, depAp.longitude) : null);
+    const dArr = (arrAp ? haversineNm(lat, lon, arrAp.latitude, arrAp.longitude) : null);
+
+    const nearDep = (dDep != null && dDep < STATUS_BANDS.NEAR_APT_NM);
+    const nearArr = (dArr != null && dArr < STATUS_BANDS.NEAR_APT_NM);
+
+    // Vorheriger stabiler Status (für Hysterese)
+    const key = statusKey(p.cid, boardType);
+    const prevStable = statusMemory.get(key)?.status || null;
+    const prevPhase = prevStable?.phase || null;
+
+    const approachBand = (prevPhase === "APPROACH" || prevPhase === "FINAL" || prevPhase === "GOAROUND")
+      ? STATUS_BANDS.APPROACH_EXIT_NM
+      : STATUS_BANDS.APPROACH_ENTER_NM;
+
+    const finalBand = (prevPhase === "FINAL")
+      ? STATUS_BANDS.FINAL_EXIT_NM
+      : STATUS_BANDS.FINAL_ENTER_NM;
+
+    const depBand = (prevPhase === "DEPARTING" || prevPhase === "CLIMB")
+      ? STATUS_BANDS.DEPAREA_EXIT_NM
+      : STATUS_BANDS.DEPAREA_ENTER_NM;
+
+    const inApproachZone = (dArr != null && dArr <= approachBand);
+    const inFinalZone    = (dArr != null && dArr <= finalBand);
+    const inDepZone      = (dDep != null && dDep <= depBand);
+
+    const stableCruise = airborne
+      && alt >= 20000
+      && gs >= 140
+      && (absVr == null || absVr < 350)
+      && !(inApproachZone);
+
+    function finalAltCeiling(distNm){
+      if(distNm == null || !isFinite(distNm)) return 5200;
+      // grobe 3°-Glide: ~318 ft/NM + Puffer, begrenzt
+      return Math.max(1800, Math.min(9500, distNm*330 + 1100));
+    }
+
+ const finalOk = airborne
+      && inFinalZone
+      && gs >= 80
+      && alt <= finalAltCeiling(dArr)
+      && (descending || (vr != null && vr < -200) || alt <= 2200);
+
+    const approachOk = airborne
+      && inApproachZone
+      && gs >= 80
+      && (
+        descending ||
+        alt <= 16000 ||
+        (dArr != null && dArr < 35 && alt <= 21000)
+      );
+
+    const goAroundOk = airborne
+      && inApproachZone
+      && climbing
+      && alt <= 11000
+      && gs >= 90;
+
+    function divertText(){
+      const nearest = findNearestAirport(lat, lon, 10);
+      if(nearest){
+        if(nearest.ap.icao && nearest.ap.icao !== arr && nearest.ap.icao !== dep){
+          return `DIVERTED @ ${nearest.ap.icao}`;
+        }
+        return `ON GROUND @ ${nearest.ap.icao}`;
+      }
+      return "ON GROUND (UNKNOWN)";
+    }
+
+    let cand = { phase:"UNK", rank:99, text:"—", cls:"info", finished:false };
+
+    if(boardType === "dep"){
+      // 1) Gate/Taxi
+      if(onGround && nearDep){
+        cand = { phase:"GATE", rank:0, text:"AT GATE / TAXI", cls:"info", finished:false };
+      }
+      // 2) Airborne in Dep Zone => DEPARTING/CLIMB (sticky)
+      else if(airborne && inDepZone){
+        if(alt < 7000){
+          cand = { phase:"DEPARTING", rank:1, text:"DEPARTING", cls:"warn", finished:false };
+        }else{
+          cand = { phase:"CLIMB", rank:1, text:"CLIMB", cls:"warn", finished:false };
+        }
+      }
+      // 3) Near Destination: FINAL/APPROACH/GO-AROUND/DESCENT
+      else if(airborne){
+        if(goAroundOk){
+          cand = { phase:"GOAROUND", rank:3, text:"GO-AROUND", cls:"warn", finished:false };
+        }else if(finalOk){
+          cand = { phase:"FINAL", rank:3, text:"FINAL", cls:"warn", finished:false };
+        }else if(approachOk){
+          cand = { phase:"APPROACH", rank:3, text:"APPROACH", cls:"warn", finished:false };
+        }else if(descending && alt < 30000){
+          cand = { phase:"DESCENT", rank:3, text:"DESCENT", cls:"warn", finished:false };
+        }else if(stableCruise){
+          cand = { phase:"CRUISE", rank:2, text:"CRUISE", cls:"good", finished:false };
+        }else{
+          // fallback: wenn vorher schon APPROACH/FINAL war und wir knapp “raus” sind, nicht sofort CRUISE
+          if(prevPhase === "APPROACH" && dArr != null && dArr < STATUS_BANDS.APPROACH_EXIT_NM){
+            cand = { phase:"APPROACH", rank:3, text:"APPROACH", cls:"warn", finished:false };
+          }else{
+            cand = { phase:"CRUISE", rank:2, text:"CRUISE", cls:"good", finished:false };
+          }
+        }
+      }
+      // 4) On ground away from departure => finished (landed/diverted)
+      else {
+        const finishedText = nearArr ? "LANDED (DEST)" : divertText();
+        cand = { phase:"FINISHED", rank:4, text: finishedText, cls: nearArr ? "good" : "bad", finished:true };
+      }
+    } else { // arrivals
+      if(airborne){
+        if(goAroundOk){
+          cand = { phase:"GOAROUND", rank:0, text:"GO-AROUND", cls:"warn", finished:false };
+        }else if(finalOk){
+          cand = { phase:"FINAL", rank:0, text:"FINAL", cls:"warn", finished:false };
+        }else if(approachOk){
+          cand = { phase:"APPROACH", rank:0, text:"APPROACH", cls:"warn", finished:false };
+        }else if(descending && alt < 30000 && dArr != null && dArr < 180){
+          cand = { phase:"DESCENT", rank:1, text:"DESCENT", cls:"info", finished:false };
+        }else if(stableCruise){
+          cand = { phase:"CRUISE", rank:1, text:"CRUISE", cls:"good", finished:false };
+        }else if(airborne && dDep != null && dDep < depBand && (climbing || alt < 18000)){
+          cand = { phase:"DEPAREA", rank:2, text:"DEPARTURE AREA", cls:"info", finished:false };
+        }else{
+          cand = { phase:"CRUISE", rank:1, text:"CRUISE", cls:"good", finished:false };
+        }
+      } else {
+        const finishedText = nearArr ? "LANDED" : divertText();
+        cand = { phase:"FINISHED", rank:3, text: finishedText, cls: nearArr ? "good" : "info", finished:true };
+      }
+    }
+
+    return stabilizeStatus(key, cand);
+  }
+
+  /********************
+   * ETA Heuristik (live + stabilisiert)
+   ********************/
+  let etaMemory = new Map(); // key -> {etaTs,lastSeen}
+
+  function etaKey(cid, boardType){ return `eta:${boardType}:${String(cid)}`; }
+
+  function computeTrackSpeedKts(prev, lat, lon, nowMs){
+    if(!prev || prev.lat==null || prev.lon==null || !prev.t) return null;
+    const dtH = (nowMs - prev.t) / 3600000;
+    if(!isFinite(dtH) || dtH < 0.0025) return null; // < ~9s
+    const dNm = haversineNm(lat, lon, prev.lat, prev.lon);
+    const kts = dNm / dtH;
+    if(!isFinite(kts) || kts < 30 || kts > 750) return null;
+    return kts;
+  }
+
+  function stabilizeEta(key, candTs, phase){
+    const now = Date.now();
+    let mem = etaMemory.get(key);
+
+    if(candTs == null || !isFinite(candTs)){
+      if(mem && (now - mem.lastSeen) < 2*60*1000){
+        mem.lastSeen = now;
+        return mem.etaTs;
+      }
+      return null;
+    }
+
+    if(!mem){
+      mem = { etaTs: candTs, lastSeen: now };
+      etaMemory.set(key, mem);
+      return candTs;
+    }
+
+    mem.lastSeen = now;
+
+    const prev = mem.etaTs;
+    const isClose = (phase==="FINAL" || phase==="APPROACH" || phase==="GOAROUND");
+    const alpha = isClose ? 0.55 : 0.30; // close-in: reaktiver, sonst glatter
+    const raw = prev + (candTs - prev) * alpha;
+
+    // Jump-Limiter pro Refresh (verhindert ETA-Sprünge)
+    const maxJump = isClose ? 6*60*1000 : 18*60*1000;
+    const diff = raw - prev;
+    const limited = prev + Math.max(-maxJump, Math.min(maxJump, diff));
+
+    mem.etaTs = limited;
+    return limited;
+  }
+
+  function pruneEtaMemory(){
+    const now = Date.now();
+    const ttl = 20*60*1000;
+    for(const [k,v] of etaMemory.entries()){
+      if(!v?.lastSeen || (now - v.lastSeen) > ttl) etaMemory.delete(k);
+    }
+  }
+
+  function computeDynamicEtaTs(p, destAp, phase){
+    if(!p || !destAp) return null;
+
+    const lat = Number(p.latitude);
+    const lon = Number(p.longitude);
+    if(!isFinite(lat) || !isFinite(lon)) return null;
+
+    const now = Date.now();
+    const distNm = haversineNm(lat, lon, destAp.latitude, destAp.longitude);
+    if(!isFinite(distNm)) return null;
+
+    const prev = prevPilotStates.get(String(p.cid));
+    const derived = computeTrackSpeedKts(prev, lat, lon, now);
+    const gs = Number(p.groundspeed || 0);
+
+    let speed = Math.max(gs, derived || 0);
+
+    // Minimal-Speed nur leicht clampen (Props nicht kaputt machen)
+    const minSpeed = (phase==="FINAL" || phase==="APPROACH" || phase==="GOAROUND") ? 85 : 110;
+    speed = Math.max(speed, minSpeed);
+    speed = Math.min(speed, 560);
+
+    if(distNm < 1.2) return now + 60*1000; // sehr nah
+
+    const factor =
+      (phase==="FINAL") ? 1.16 :
+      (phase==="APPROACH") ? 1.12 :
+      (phase==="DESCENT") ? 1.08 :
+      (phase==="DEPAREA") ? 1.10 :
+      1.05;
+
+    const minutes = (distNm / speed) * 60 * factor;
+    return now + minutes*60000;
+  }
+
+  function applyEtaForFlight(f, focusAp, boardType){
+    if(boardType !== "arr") return; // ETA-Spalte nur Arrivals
+
+    const now = Date.now();
+    const phase = f.status?.phase || "UNK";
+
+    let cand = null;
+
+    // finished: zeige "realistisch" die letzte Live-Aktualisierung als Zeitstempel
+    if(f.status?.finished){
+      const lu = f.pilot?.last_updated ? new Date(f.pilot.last_updated).getTime() : null;
+      cand = isFinite(lu) ? lu : (f.etaPlannedTs ?? null);
+    } else if(f.__prefile){
+      cand = f.etaPlannedTs ?? null;
+    } else {
+      // live ETA aus Distanz/Speed
+      cand = computeDynamicEtaTs(f.pilot, focusAp, phase);
+
+      // optional: leicht mit planned ETA blenden, wenn beide plausibel nahe beieinander
+      if(isFinite(cand) && isFinite(f.etaPlannedTs)){
+        const planned = f.etaPlannedTs;
+        if(Math.abs(planned - cand) < 4*3600*1000) cand = cand*0.70 + planned*0.30;
+      } else if(!isFinite(cand)) {
+        cand = f.etaPlannedTs ?? null;
+      }
+
+      // niemals “deutlich in der Vergangenheit”, solange nicht finished
+      if(isFinite(cand) && cand < (now - 2*60*1000)) cand = now + 2*60*1000;
+    }
+
+    const sm = stabilizeEta(etaKey(f.cid, boardType), cand, phase);
+    f.etaTs = sm;
+    f.etaText = sm != null ? fmtHHMMFromTs(sm) : "—";
+  }
+
+/********************
+   * Sorting: finished ALWAYS bottom (dep+arr) + sinnvoller Status
+   ********************/
+  const ARR_PHASE_ORDER = {
+    GOAROUND:0,
+    FINAL:1,
+    APPROACH:2,
+    DESCENT:3,
+    CRUISE:4,
+    DEPAREA:5,
+    PREFILE:6,
+    GATE:7,
+    UNK:90,
+    FINISHED:99
+  };
+  const DEP_PHASE_ORDER = {
+    PREFILE:0,
+    GATE:1,
+    DEPARTING:2,
+    CLIMB:3,
+    CRUISE:4,
+    DESCENT:5,
+    APPROACH:6,
+    FINAL:7,
+    GOAROUND:6,
+    UNK:90,
+    FINISHED:99
+  };
+
+  function statusSensibleKey(f, boardType){
+    const phase = f.status?.phase || "UNK";
+    const base = (boardType==="arr")
+      ? (ARR_PHASE_ORDER[phase] ?? 90)
+      : (DEP_PHASE_ORDER[phase] ?? 90);
+
+    // sub-key: Arrivals nah = oben; sonst ETA; Departures Gate nach STD
+    let sub = 9e12; // in Sekunden, klein genug für JS-Int Genauigkeit
+
+    if(boardType === "arr"){
+      if(phase==="FINAL" || phase==="APPROACH" || phase==="DESCENT" || phase==="GOAROUND"){
+        sub = Math.floor((f.dToFocusNm ?? 9999) * 1000); // distance *1000
+      }else{
+        const ts = (f.etaTs ?? f.etaPlannedTs ?? null);
+        sub = ts != null ? Math.floor(ts/1000) : 9e12;
+      }
+    } else {
+      if(phase==="GATE" || phase==="PREFILE"){
+        const ts = f.stdTs ?? null;
+        sub = ts != null ? Math.floor(ts/1000) : 9e12;
+      }else if(phase==="DEPARTING" || phase==="CLIMB"){
+        sub = Math.floor((f.dFromFocusNm ?? 9999) * 1000);
+      }else{
+        sub = Math.floor((f.dToPlanNm ?? 9999) * 1000);
+      }
+    }
+
+    return base*1e12 + sub; // bleibt < 9e15
+  }
+
+  function sortFlights(list, {by, dir}, boardType){
+    const d = dir || 1;
+    const coll = [...list];
+
+    const keyFn = (f) => {
+      if(by === "status") return statusSensibleKey(f, boardType);
+      if(by === "callsign") return f.callsign;
+      if(by === "dest") return f.arr;
+      if(by === "orig") return f.dep;
+      if(by === "xp") return (f.exp?.score ?? -1);
+      if(by === "time"){
+        if(boardType === "dep") return (f.stdTs ?? 9e15);
+        return (f.etaTs ?? f.etaPlannedTs ?? 9e15);
+      }
+      return 0;
+    };
+
+    coll.sort((a,b) => {
+      const fa = a.status?.finished ? 1 : 0;
+      const fb = b.status?.finished ? 1 : 0;
+      if(fa !== fb) return fa - fb; // unfinished first
+
+      const ka = keyFn(a);
+      const kb = keyFn(b);
+
+      if(typeof ka === "number" && typeof kb === "number"){
+        if(ka !== kb) return d * (ka - kb);
+      } else {
+        const sa = String(ka ?? "");
+        const sb = String(kb ?? "");
+        const c = sa.localeCompare(sb, "en", { sensitivity:"base" });
+        if(c !== 0) return d * c;
+      }
+
+      // tie-breaker: time then callsign
+      const ta = (boardType === "dep") ? (a.stdTs ?? 9e15) : (a.etaTs ?? a.etaPlannedTs ?? 9e15);
+      const tb = (boardType === "dep") ? (b.stdTs ?? 9e15) : (b.etaTs ?? b.etaPlannedTs ?? 9e15);
+      if(ta !== tb) return ta - tb;
+
+      return a.callsign.localeCompare(b.callsign, "en", { sensitivity:"base" });
+    });
+
+    return coll;
+  }
+
+  /********************
+   * Render epoch (for "blink until next refresh")
+   ********************/
+  let renderEpoch = 0;
+
+  /********************
+   * Board Renderer (FLIP + blink + immediate XP updates)
+   ********************/
+  class Board {
+    constructor(tbody, boardType){
+      this.tbody = tbody;
+      this.boardType = boardType;
+      this.rows = new Map(); // id -> tr
+    }
+
+    makeRow(f){
+      const tr = document.createElement("tr");
+      tr.dataset.id = String(f.id);
+
+      const tdTime = document.createElement("td"); tdTime.className = "center";
+      const tdCall = document.createElement("td");
+      const tdAP = document.createElement("td");
+      const tdInfo = document.createElement("td");
+      const tdAlt = document.createElement("td"); tdAlt.className = "right";
+      const tdStatus = document.createElement("td");
+      const tdXp = document.createElement("td");
+
+      tdCall.innerHTML = `<span style="font-weight:800">${escapeHtml(f.callsign)}</span>`;
+      tdCall.title = `${f.name || ""}\nCID: ${f.cid}`;
+
+      tdXp.innerHTML = `
+        <span class="xpPill loading info" data-cid="${escapeHtml(f.cid)}" data-tip="Pilot-Experience lädt…">
+          <span class="spinner" aria-hidden="true"></span>
+          <span class="lvl">XP</span>
+          <span class="score">…</span>
+        </span>
+      `;
+
+      tr.append(tdTime, tdCall, tdAP, tdInfo, tdAlt, tdStatus, tdXp);
+
+      tr.addEventListener("click", () => {
+        if(window.getSelection && String(window.getSelection()).length) return;
+        openPilotModal(tr.__flight || f);
+      });
+
+      tr.__flight = f;
+      tr.__statusSig = null;
+      tr.__blinkActive = false;
+      tr.__blinkSetAt = -1;
+      return tr;
+    }
+
+    updateXpCell(tr, f){
+      const td = tr.children[6];
+      let pill = td.querySelector(".xpPill");
+      if(!pill){
+        td.innerHTML = `
+          <span class="xpPill loading info" data-cid="${escapeHtml(f.cid)}" data-tip="Pilot-Experience lädt…">
+            <span class="spinner" aria-hidden="true"></span>
+            <span class="lvl">XP</span>
+            <span class="score">…</span>
+          </span>
+        `;
+        pill = td.querySelector(".xpPill");
+      }
+
+      if(f.exp && f.exp.score != null && f.details && f.stats){
+        pill.classList.remove("loading");
+        pill.classList.remove("good","warn","bad","info");
+        pill.classList.add(f.exp.cls || "info");
+        pill.innerHTML = `
+          <span class="xDot" aria-hidden="true"></span>
+          <span class="lvl">${escapeHtml(f.exp.short)}</span>
+          <span class="score">${escapeHtml(String(f.exp.score))}</span>
+        `;
+        pill.dataset.tip = experienceTooltipText(f.details, f.stats, f.exp);
+      }else{
+        pill.classList.add("loading");
+        pill.classList.remove("good","warn","bad");
+        pill.classList.add("info");
+        pill.innerHTML = `
+          <span class="spinner" aria-hidden="true"></span>
+          <span class="lvl">XP</span>
+          <span class="score">…</span>
+        `;
+        pill.dataset.tip = "Pilot-Experience lädt…";
+      }
+    }
+
+    updateRow(tr, f){
+      const tds = tr.children;
+
+      // finished row styling (dep + arr)
+      if(f.status.finished) tr.classList.add("finishedRow");
+      else tr.classList.remove("finishedRow");
+
+      // clear blink when a new refresh starts (i.e., we render again)
+      if(tr.__blinkActive && tr.__blinkSetAt < renderEpoch){
+        tr.__blinkActive = false;
+      }
+
+      // detect status change vs previous render
+      const newSig = `${f.status.rank}|${f.status.text}|${f.status.cls}|${f.status.finished ? 1 : 0}`;
+      if(tr.__statusSig && tr.__statusSig !== newSig){
+        tr.__blinkActive = true;
+        tr.__blinkSetAt = renderEpoch; // blink until next refresh (when updateRow runs again)
+      }
+      tr.__statusSig = newSig;
+
+      tds[0].textContent = this.boardType === "dep" ? (f.stdText) : (f.etaText);
+
+      tds[1].querySelector("span").textContent = f.callsign;
+      tds[1].title = `${f.name || ""}\nCID: ${f.cid}`;
+
+      tds[2].innerHTML = this.boardType === "dep"
+        ? `<span style="font-weight:800">${escapeHtml(f.arr)}</span>`
+        : `<span style="font-weight:800">${escapeHtml(f.dep)}</span>`;
+
+      const ac = f.aircraft || "—";
+      const rt = (f.route || "").trim();
+      tds[3].innerHTML = `
+        <span style="font-weight:800">${escapeHtml(ac)}</span>
+        <span class="muted"> · </span>
+        <span class="muted">${escapeHtml(rt || `${f.dep} → ${f.arr}`)}</span>
+      `;
+
+      tds[4].textContent = altGsText(f.pilot);
+
+      const blinkCls = tr.__blinkActive ? " blink" : "";
+      tds[5].innerHTML = `
+        <span class="badge ${f.status.cls}${blinkCls}">
+          <span class="sDot"></span>
+          <span>${escapeHtml(f.status.text)}</span>
+        </span>
+      `;
+
+      this.updateXpCell(tr, f);
+      tr.__flight = f;
+    }
+
+    async render(list){
+      const first = new Map();
+      for(const [id, tr] of this.rows){
+        first.set(id, tr.getBoundingClientRect());
+      }
+
+      const newIds = new Set(list.map(x => String(x.id)));
+
+      for(const [id, tr] of [...this.rows.entries()]){
+        if(!newIds.has(id)){
+          tr.classList.add("removing");
+          this.rows.delete(id);
+          tr.addEventListener("transitionend", () => tr.remove(), { once:true });
+          setTimeout(() => { if(tr.isConnected) tr.remove(); }, 400);
+        }
+      }
+
+      for(const f of list){
+        const id = String(f.id);
+        let tr = this.rows.get(id);
+        if(!tr){
+          tr = this.makeRow(f);
+          tr.classList.add("adding");
+          this.rows.set(id, tr);
+        }
+        this.updateRow(tr, f);
+      }
+
+      const frag = document.createDocumentFragment();
+      for(const f of list){
+        const tr = this.rows.get(String(f.id));
+        if(tr) frag.appendChild(tr);
+      }
+      this.tbody.appendChild(frag);
+
+      requestAnimationFrame(() => {
+        for(const [, tr] of this.rows){
+          if(tr.classList.contains("adding")){
+            tr.classList.remove("adding");
+            tr.style.transition = "opacity .18s ease, transform .18s ease";
+            tr.style.opacity = "1";
+            tr.style.transform = "translateY(0)";
+            setTimeout(() => {
+              tr.style.transition = "";
+              tr.style.opacity = "";
+              tr.style.transform = "";
+            }, 250);
+          }
+        }
+      });
+
+      requestAnimationFrame(() => {
+        for(const [id, tr] of this.rows){
+          const firstRect = first.get(id);
+          if(!firstRect) continue;
+          const lastRect = tr.getBoundingClientRect();
+          const dx = firstRect.left - lastRect.left;
+          const dy = firstRect.top - lastRect.top;
+          if(Math.abs(dx) < 0.5 && Math.abs(dy) < 0.5) continue;
+          tr.style.transform = `translate(${dx}px, ${dy}px)`;
+          tr.style.transition = "transform 0s";
+          requestAnimationFrame(() => {
+            tr.style.transition = "transform 420ms cubic-bezier(.2,.8,.2,1)";
+            tr.style.transform = "";
+          });
+        }
+      });
+    }
+
+    updateXpById(id){
+      const tr = this.rows.get(String(id));
+      if(!tr) return;
+      this.updateXpCell(tr, tr.__flight);
+    }
+  }
+
+  const depBoard = new Board(depBody, "dep");
+  const arrBoard = new Board(arrBody, "arr");
+
+  /********************
+   * Tooltip
+   ********************/
+  let tooltipActive = false;
+  function showTooltip(text, x, y){
+    tooltip.textContent = text;
+    tooltip.style.left = `${x}px`;
+    tooltip.style.top = `${y}px`;
+    tooltip.classList.add("show");
+    tooltipActive = true;
+  }
+  function hideTooltip(){
+    tooltip.classList.remove("show");
+    tooltipActive = false;
+  }
+  document.addEventListener("mousemove", (e) => {
+    if(!tooltipActive) return;
+    tooltip.style.left = `${e.clientX}px`;
+    tooltip.style.top = `${e.clientY}px`;
+  });
+  function attachTooltipDelegation(tbody){
+    tbody.addEventListener("mouseover", (e) => {
+      const pill = e.target.closest(".xpPill");
+      if(!pill) return;
+      showTooltip(pill.dataset.tip || "—", e.clientX, e.clientY);
+    });
+    tbody.addEventListener("mouseout", (e) => {
+      const pill = e.target.closest(".xpPill");
+      if(!pill) return;
+      hideTooltip();
+    });
+  }
+  attachTooltipDelegation(depBody);
+  attachTooltipDelegation(arrBody);
+
+  /********************
+   * Pilot modal
+   ********************/
+  function setKv(el, pairs){
+    el.innerHTML = "";
+    for(const [k,v] of pairs){
+      const dk = document.createElement("div"); dk.className="k"; dk.textContent = k;
+      const dv = document.createElement("div"); dv.className="v"; dv.textContent = v;
+      el.appendChild(dk); el.appendChild(dv);
+    }
+  }
+  function setLinks(el, links){
+    el.innerHTML = "";
+    for(const {href, text} of links){
+      const a = document.createElement("a");
+      a.className = "aBtn";
+      a.href = href;
+      a.target = "_blank";
+      a.rel = "noreferrer";
+      a.textContent = text;
+      el.appendChild(a);
+    }
+  }
+  async function openPilotModal(f){
+    pilotModalOverlay.classList.add("show");
+    historyKv.innerHTML = "";
+    xpList.innerHTML = "";
+    xpLinks.innerHTML = "";
+
+    pilotModalTitle.textContent = `CID ${f.cid} · ${f.callsign}`;
+    pilotModalSubtitle.textContent = `${f.name || "—"} · ${f.dep} → ${f.arr}`;
+
+    setKv(flightKv, [
+      ["Callsign", f.callsign],
+      ["CID", String(f.cid)],
+      ["Name", f.name || "—"],
+      ["Route", `${f.dep} → ${f.arr}`],
+      ["Aircraft", f.aircraft || "—"],
+      ["STD (deptime)", f.stdText || "—"],
+      ["EET", (f.fp?.enroute_time ? (f.fp.enroute_time.slice(0,2)+":"+f.fp.enroute_time.slice(2,4)) : "—")],
+      ["ETA (heur.)", f.etaText || "—"],
+      ["Status", f.status?.text || "—"],
+      ["Last Updated", f.pilot?.last_updated ? (new Date(f.pilot.last_updated).toISOString().slice(0,19) + "Z") : "—"]
+    ]);
+
+    let details = f.details, stats = f.stats, exp = f.exp;
+    try{
+      if(!details) details = await getMemberDetails(f.cid);
+      if(!stats) stats = await getMemberStats(f.cid);
+      exp = computeExperience(details, stats);
+    }catch(err){
+      console.warn("Pilot modal member fetch failed:", err);
+    }
+
+    setKv(xpKv, [
+      ["Experience", exp?.score != null ? `${exp.label} · Score ${exp.score}/100` : "—"],
+      ["Registriert", details?.reg_date ? fmtDateUtc(details.reg_date) : "—"],
+      ["Pilot hours", stats ? fmtHours(stats.pilot) : "—"],
+      ["ATC hours", stats ? fmtHours(stats.atc) : "—"],
+      ["ATC weighted", (stats && exp) ? fmtHours(exp.atcWeighted) : "—"],
+      ["Region/Division", (details?.region_id && details?.division_id) ? `${details.region_id} / ${details.division_id}` : "—"]
+    ]);
+
+    for(const r of (exp?.reasons || [])){
+      const li = document.createElement("li");
+      li.textContent = r;
+      xpList.appendChild(li);
+    }
+
+    setLinks(xpLinks, [
+      { href: `https://stats.vatsim.net/stats/${encodeURIComponent(f.cid)}`, text: "VATSIM Stats Center" }
+    ]);
+
+    try{
+      const hist = await getMemberHistory(f.cid, { limit: 50 });
+      const items = Array.isArray(hist?.items) ? hist.items : [];
+      const count = Number(hist?.count ?? items.length ?? 0);
+      let lastEnd = null;
+      for(const it of items){
+        if(it?.end){
+          const d = new Date(it.end);
+          if(isFinite(d) && (!lastEnd || d > lastEnd)) lastEnd = d;
+        }
+      }
+      setKv(historyKv, [
+        ["Sessions (returned)", String(items.length)],
+        ["Sessions (count)", String(count)],
+        ["Letzte beendete Session", lastEnd ? (lastEnd.toISOString().slice(0,19) + "Z") : "—"],
+        ["Hinweis", "History zeigt vergangene Sessions; aktuelle Session steht im Live-Feed (logon_time)."]
+      ]);
+    }catch(err){
+      setKv(historyKv, [
+        ["History", "Konnte nicht geladen werden (Rate Limit / API Fehler)."]
+      ]);
+    }
+  }
+  function closePilotModal(){ pilotModalOverlay.classList.remove("show"); }
+  pilotModalClose.addEventListener("click", closePilotModal);
+  pilotModalOverlay.addEventListener("click", (e) => { if(e.target === pilotModalOverlay) closePilotModal(); });
+
+  /********************
+   * Config modal
+   ********************/
+  function openConfigModal(){
+    cfgAirport.value = settings.airportInput || "EDDB";
+    cfgInterval.value = Math.round((settings.feedIntervalMs || 15000) / 1000);
+    cfgPrefiles.checked = !!settings.showPrefiles;
+    cfgHideArrLanded.checked = !!settings.hideArrivalsLanded;
+    cfgHideDepFinished.checked = !!settings.hideDeparturesFinished;
+    cfgXpHydrate.value = settings.xpHydrateMax ?? 40;
+
+    const th = normalizedThresholds(settings.xpThresholds);
+    cfgT1.value = th.t1; cfgT2.value = th.t2; cfgT3.value = th.t3; cfgT4.value = th.t4;
+
+    configModalOverlay.classList.add("show");
+  }
+  function closeConfigModal(){ configModalOverlay.classList.remove("show"); }
+
+  configBtn.addEventListener("click", openConfigModal);
+  configClose.addEventListener("click", closeConfigModal);
+  cfgCancel.addEventListener("click", closeConfigModal);
+  configModalOverlay.addEventListener("click", (e) => { if(e.target === configModalOverlay) closeConfigModal(); });
+
+  cfgDefaults.addEventListener("click", () => {
+    cfgAirport.value = DEFAULTS.airportInput;
+    cfgInterval.value = Math.round(DEFAULTS.feedIntervalMs/1000);
+    cfgPrefiles.checked = DEFAULTS.showPrefiles;
+    cfgHideArrLanded.checked = DEFAULTS.hideArrivalsLanded;
+    cfgHideDepFinished.checked = DEFAULTS.hideDeparturesFinished;
+    cfgXpHydrate.value = DEFAULTS.xpHydrateMax;
+    cfgT1.value = DEFAULTS.xpThresholds.t1;
+    cfgT2.value = DEFAULTS.xpThresholds.t2;
+    cfgT3.value = DEFAULTS.xpThresholds.t3;
+    cfgT4.value = DEFAULTS.xpThresholds.t4;
+  });
+
+  function resetCache(){
+    localStorage.removeItem(MEMBER_CACHE_KEY);
+    localStorage.removeItem(API_LAST_REQ_KEY);
+    memberCache = {};
+    inflightXp.clear();
+    // set all current flights back to loading-state
+    for(const f of [...lastDeps, ...lastArrs]){
+      f.details = null; f.stats = null; f.exp = null;
+      depBoard.updateXpById(f.id);
+      arrBoard.updateXpById(f.id);
+    }
+    requestXpForVisibleFlights();
+  }
+
+  cfgResetCache.addEventListener("click", () => {
+    const ok = confirm("Lokalen Member-Cache wirklich löschen?\n\nDanach werden Pilot-XP erneut per API abgerufen (Rate Limit beachten).");
+    if(!ok) return;
+    resetCache();
+  });
+
+  cfgSave.addEventListener("click", async () => {
+    const airport = normalizeCode(cfgAirport.value || "EDDB");
+    const intervalS = clampInt(cfgInterval.value, 5, 120);
+    const hydrateMax = clampInt(cfgXpHydrate.value, 10, 120);
+    const th = normalizedThresholds({ t1: cfgT1.value, t2: cfgT2.value, t3: cfgT3.value, t4: cfgT4.value });
+
+    settings.airportInput = airport;
+    settings.feedIntervalMs = intervalS * 1000;
+    settings.showPrefiles = !!cfgPrefiles.checked;
+    settings.hideArrivalsLanded = !!cfgHideArrLanded.checked;
+    settings.hideDeparturesFinished = !!cfgHideDepFinished.checked;
+    settings.xpHydrateMax = hydrateMax;
+    settings.xpThresholds = th;
+
+    saveSettings();
+
+    airportInputEl.value = settings.airportInput;
+
+    rebuildLegend();
+    await applyAirport(settings.airportInput, true);
+    startLoop();
+    closeConfigModal();
+  });
+
+  /********************
+   * Feed Loop + XP streaming
+   ********************/
+  let currentAirportIcao = "EDDB";
+  let lastFeedTs = null;
+  let feedTimer = null;
+
+  let lastDeps = [];
+  let lastArrs = [];
+  let flightsByCid = new Map();
+  let inflightXp = new Map();
+  let resortTimers = { dep:null, arr:null };
+
+  function setFeedStatus({ok, msg, ageSec}){
+    feedDot.className = "dot " + (ok ? "good" : "bad");
+    feedText.textContent = msg;
+    feedAge.textContent = ageSec != null ? `${Math.max(0, Math.round(ageSec))}s` : "—";
+  }
+
+  async function fetchFeed(){
+    const res = await fetch(VATSIM_DATA_URL, { cache:"no-store" });
+    if(!res.ok) throw new Error(`Feed HTTP ${res.status}`);
+    return res.json();
+  }
+
+  function buildFlightObjectFromPilot(p){
+    const fp = p.flight_plan || null;
+    const dep = normalizeCode(fp?.departure || "");
+    const arr = normalizeCode(fp?.arrival || "");
+    const aircraft = normalizeCode(fp?.aircraft_short || fp?.aircraft_faa || fp?.aircraft || "");
+
+    const now = Date.now();
+    const stdTs = plannedStdTs(fp?.deptime || "", now);
+    const etaPlannedTs = plannedEtaTs(stdTs, fp?.enroute_time || "");
+
+    return {
+      id: p.cid,
+      cid: p.cid,
+      callsign: normalizeCode(p.callsign || ""),
+      name: p.name || "",
+      dep, arr,
+      aircraft: aircraft || "—",
+      route: fp?.route || "",
+      fp,
+      pilot: p,
+
+      // absolute UTC timestamps
+      stdTs,
+      stdText: stdTs != null ? fmtHHMMFromTs(stdTs) : "—",
+
+      etaPlannedTs,
+      etaTs: etaPlannedTs,             // wird bei Arrivals live überschrieben
+      etaText: etaPlannedTs != null ? fmtHHMMFromTs(etaPlannedTs) : "—",
+
+      // Distanzfelder für Sort/ETA
+      dFromFocusNm: null,
+      dToFocusNm: null,
+      dToPlanNm: null,
+      dFromPlanNm: null,
+
+      status: { phase:"UNK", rank:99, text:"—", cls:"info", finished:false },
+      details:null, stats:null, exp:null
+    };
+  }
+
+
+  function buildFlightObjectFromPrefile(pf){
+    const fp = pf.flight_plan || null;
+    const dep = normalizeCode(fp?.departure || "");
+    const arr = normalizeCode(fp?.arrival || "");
+    const aircraft = normalizeCode(fp?.aircraft_short || fp?.aircraft_faa || fp?.aircraft || "");
+
+    const now = Date.now();
+    const stdTs = plannedStdTs(fp?.deptime || "", now);
+    const etaPlannedTs = plannedEtaTs(stdTs, fp?.enroute_time || "");
+
+    return {
+      id: "P" + pf.cid + "_" + normalizeCode(pf.callsign || ""),
+      cid: pf.cid,
+      callsign: normalizeCode(pf.callsign || ""),
+      name: pf.name || "",
+      dep, arr,
+      aircraft: aircraft || "—",
+      route: fp?.route || "",
+      fp,
+      pilot: { altitude:0, groundspeed:0, latitude:0, longitude:0, last_updated: pf.last_updated },
+
+      stdTs,
+      stdText: stdTs != null ? fmtHHMMFromTs(stdTs) : "—",
+
+      etaPlannedTs,
+      etaTs: etaPlannedTs,
+      etaText: etaPlannedTs != null ? fmtHHMMFromTs(etaPlannedTs) : "—",
+
+      dFromFocusNm: null,
+      dToFocusNm: null,
+      dToPlanNm: null,
+      dFromPlanNm: null,
+
+      status: { phase:"PREFILE", rank:0, text:"PREFILE", cls:"info", finished:false },
+      details:null, stats:null, exp:null,
+      __prefile:true
+    };
+  }
+
+
+  function applyCachedXpIfAvailable(f){
+    const entry = getCacheEntry(f.cid);
+    if(entry?.details && isFresh(entry.detailsTs, settings.memberTtlDetailsMs)) f.details = entry.details;
+    if(entry?.stats && isFresh(entry.statsTs, settings.memberTtlStatsMs)) f.stats = entry.stats;
+    if(f.details && f.stats) f.exp = computeExperience(f.details, f.stats);
+  }
+
+  async function ensureXpForCid(cid){
+    cid = String(cid);
+    if(inflightXp.has(cid)) return inflightXp.get(cid);
+
+    const p = (async () => {
+      const entry = getCacheEntry(cid);
+      let details = (entry?.details && isFresh(entry.detailsTs, settings.memberTtlDetailsMs)) ? entry.details : null;
+      let stats   = (entry?.stats   && isFresh(entry.statsTs, settings.memberTtlStatsMs))   ? entry.stats   : null;
+
+      if(!details) details = await getMemberDetails(cid);
+      if(!stats)   stats   = await getMemberStats(cid);
+
+      const exp = computeExperience(details, stats);
+      return { details, stats, exp };
+    })();
+
+    inflightXp.set(cid, p);
+    try{ return await p; }
+    finally{ inflightXp.delete(cid); }
+  }
+
+  function scheduleResort(which){
+    const isXpSort = (which === "dep") ? (settings.depSort.by === "xp") : (settings.arrSort.by === "xp");
+    if(!isXpSort) return;
+    if(resortTimers[which]) clearTimeout(resortTimers[which]);
+    resortTimers[which] = setTimeout(async () => {
+      resortTimers[which] = null;
+      if(which === "dep"){
+        lastDeps = sortFlights(lastDeps, settings.depSort, "dep");
+        await depBoard.render(lastDeps);
+      }else{
+        lastArrs = sortFlights(lastArrs, settings.arrSort, "arr");
+        await arrBoard.render(lastArrs);
+      }
+    }, 650);
+  }
+
+  function requestXpForVisibleFlights(){
+    const max = settings.xpHydrateMax ?? 40;
+    const targets = [...lastDeps.slice(0, max), ...lastArrs.slice(0, max)];
+
+    for(const f of targets){
+      applyCachedXpIfAvailable(f);
+      depBoard.updateXpById(f.id);
+      arrBoard.updateXpById(f.id);
+    }
+
+    const uniqueCids = new Set(targets.map(f => String(f.cid)));
+    for(const cid of uniqueCids){
+      const entry = getCacheEntry(cid);
+      const haveDetails = entry?.details && isFresh(entry.detailsTs, settings.memberTtlDetailsMs);
+      const haveStats = entry?.stats && isFresh(entry.statsTs, settings.memberTtlStatsMs);
+      if(haveDetails && haveStats) continue;
+
+      ensureXpForCid(cid).then(({details, stats, exp}) => {
+        const refs = flightsByCid.get(String(cid)) || [];
+        for(const f of refs){
+          f.details = details;
+          f.stats = stats;
+          f.exp = exp;
+          depBoard.updateXpById(f.id);
+          arrBoard.updateXpById(f.id);
+        }
+        scheduleResort("dep");
+        scheduleResort("arr");
+      }).catch(() => {});
+    }
+  }
+
+  async function refresh(){
+    try{
+      const data = await fetchFeed();
+      renderEpoch++; // NEW: used for blink lifecycle
+
+      lastFeedTs = data?.general?.update_timestamp ? new Date(data.general.update_timestamp) : null;
+
+      const focus = currentAirportIcao;
+	  const focusAp = getAirport(focus);
+      const pilots = Array.isArray(data?.pilots) ? data.pilots : [];
+      const prefiles = (settings.showPrefiles && Array.isArray(data?.prefiles)) ? data.prefiles : [];
+
+      let deps = [];
+      let arrs = [];
+      flightsByCid = new Map();
+
+      const nextPrev = new Map(prevPilotStates);
+
+      for(const p of pilots){
+        nextPrev.set(String(p.cid), { alt:Number(p.altitude||0), lat:Number(p.latitude), lon:Number(p.longitude), t: Date.now() });
+
+        const fp = p.flight_plan;
+        if(!fp?.departure || !fp?.arrival) continue;
+
+        const dep = normalizeCode(fp.departure);
+        const arr = normalizeCode(fp.arrival);
+
+        if(dep === focus){
+          const f = buildFlightObjectFromPilot(p);
+          f.status = classifyFlight(p, "dep");
+		            const lat = Number(p.latitude), lon = Number(p.longitude);
+          if(focusAp && isFinite(lat) && isFinite(lon)){
+            f.dFromFocusNm = haversineNm(lat, lon, focusAp.latitude, focusAp.longitude);
+          }
+          const arrAp = getAirport(arr);
+          if(arrAp && isFinite(lat) && isFinite(lon)){
+            f.dToPlanNm = haversineNm(lat, lon, arrAp.latitude, arrAp.longitude);
+          }
+          applyCachedXpIfAvailable(f);
+
+          if(!(settings.hideDeparturesFinished && f.status.finished)){
+            deps.push(f);
+            const key = String(f.cid);
+            if(!flightsByCid.has(key)) flightsByCid.set(key, []);
+            flightsByCid.get(key).push(f);
+          }
+        }
+
+        if(arr === focus){
+          const f = buildFlightObjectFromPilot(p);
+          f.status = classifyFlight(p, "arr");
+		            const lat = Number(p.latitude), lon = Number(p.longitude);
+          if(focusAp && isFinite(lat) && isFinite(lon)){
+            f.dToFocusNm = haversineNm(lat, lon, focusAp.latitude, focusAp.longitude);
+          }
+          const depAp = getAirport(dep);
+          if(depAp && isFinite(lat) && isFinite(lon)){
+            f.dFromPlanNm = haversineNm(lat, lon, depAp.latitude, depAp.longitude);
+          }
+
+          // ETA (live, stabilisiert)
+          applyEtaForFlight(f, focusAp, "arr");
+
+          applyCachedXpIfAvailable(f);
+
+          if(!(settings.hideArrivalsLanded && f.status.finished)){
+            arrs.push(f);
+            const key = String(f.cid);
+            if(!flightsByCid.has(key)) flightsByCid.set(key, []);
+            flightsByCid.get(key).push(f);
+          }
+        }
+      }
+
+      prevPilotStates = nextPrev;
+	        pruneStatusMemory();
+			      pruneEtaMemory();
+
+      if(settings.showPrefiles){
+        for(const pf of prefiles){
+          const fp = pf.flight_plan;
+          if(!fp?.departure || !fp?.arrival) continue;
+
+          const dep = normalizeCode(fp.departure);
+          const arr = normalizeCode(fp.arrival);
+
+          if(dep === focus){
+            const f = buildFlightObjectFromPrefile(pf);
+            applyCachedXpIfAvailable(f);
+            deps.push(f);
+            const key = String(f.cid);
+            if(!flightsByCid.has(key)) flightsByCid.set(key, []);
+            flightsByCid.get(key).push(f);
+          }
+
+          if(arr === focus){
+            const f = buildFlightObjectFromPrefile(pf);
+            applyCachedXpIfAvailable(f);
+            arrs.push(f);
+            const key = String(f.cid);
+            if(!flightsByCid.has(key)) flightsByCid.set(key, []);
+            flightsByCid.get(key).push(f);
+          }
+        }
+      }
+
+      deps = sortFlights(deps, settings.depSort, "dep");
+      arrs = sortFlights(arrs, settings.arrSort, "arr");
+
+      lastDeps = deps;
+      lastArrs = arrs;
+
+      await depBoard.render(deps);
+      await arrBoard.render(arrs);
+
+      requestXpForVisibleFlights();
+
+      const ageSec = lastFeedTs ? (Date.now() - lastFeedTs.getTime())/1000 : null;
+      setFeedStatus({ ok:true, msg:"Feed: OK", ageSec });
+    }catch(err){
+      console.warn("Feed refresh failed:", err);
+      setFeedStatus({ ok:false, msg:"Feed: ERROR", ageSec:null });
+    }
+  }
+
+  function startLoop(){
+    if(feedTimer) clearInterval(feedTimer);
+    feedTimer = setInterval(refresh, settings.feedIntervalMs);
+  }
+
+  /********************
+   * UTC Clock + Feed age
+   ********************/
+  function updateUtcClock(){
+    utcClockEl.textContent = new Date().toISOString().slice(11,19);
+    if(lastFeedTs){
+      const ageSec = (Date.now() - lastFeedTs.getTime())/1000;
+      feedAge.textContent = `${Math.max(0, Math.round(ageSec))}s`;
+    }
+  }
+  setInterval(updateUtcClock, 250);
+
+  /********************
+   * Header apply airport
+   ********************/
+  async function applyAirport(code, fromConfig=false){
+    settings.airportInput = normalizeCode(code || "EDDB");
+    saveSettings();
+    currentAirportIcao = resolveAirportToIcao(settings.airportInput);
+    if(!fromConfig) rebuildLegend();
+    await refresh();
+  }
+
+  applyAirportBtn.addEventListener("click", () => applyAirport(airportInputEl.value));
+  airportInputEl.addEventListener("keydown", (e) => { if(e.key === "Enter") applyAirport(airportInputEl.value); });
+  refreshBtn.addEventListener("click", refresh);
+
+  depSortEl.addEventListener("change", () => {
+    settings.depSort.by = depSortEl.value;
+    saveSettings();
+    refresh();
+  });
+  depDirBtn.addEventListener("click", () => {
+    settings.depSort.dir *= -1;
+    depDirBtn.textContent = settings.depSort.dir === 1 ? "▲" : "▼";
+    saveSettings();
+    refresh();
+  });
+
+  arrSortEl.addEventListener("change", () => {
+    settings.arrSort.by = arrSortEl.value;
+    saveSettings();
+    refresh();
+  });
+  arrDirBtn.addEventListener("click", () => {
+    settings.arrSort.dir *= -1;
+    arrDirBtn.textContent = settings.arrSort.dir === 1 ? "▲" : "▼";
+    saveSettings();
+    refresh();
+  });
+
+  /********************
+   * Boot
+   ********************/
+  async function boot(){
+    airportInputEl.value = settings.airportInput || "EDDB";
+    depSortEl.value = settings.depSort.by;
+    depDirBtn.textContent = settings.depSort.dir === 1 ? "▲" : "▼";
+    arrSortEl.value = settings.arrSort.by;
+    arrDirBtn.textContent = settings.arrSort.dir === 1 ? "▲" : "▼";
+
+    rebuildLegend();
+    await ensureAirportIndex();
+    currentAirportIcao = resolveAirportToIcao(settings.airportInput);
+
+    setFeedStatus({ ok:true, msg:"Feed: …", ageSec:null });
+    await refresh();
+    startLoop();
+  }
+
+  boot();
+})();
+</script>
+</body>
+</html>
