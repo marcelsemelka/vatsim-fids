@@ -1,0 +1,355 @@
+*** Begin Patch
+*** Update File: index.html
+@@
+   const I18N = {
+     de: {
+@@
+ 	  status_gate_named: "AM GATE {gate}",
+ 	  status_landed_gate: "GELANDET (GATE {gate})",
+ 	  status_taxi: "TAXI",
+       status_gate_plain: "AM GATE",
++      status_gate_plain_at: "AM GATE @{icao}",
+       status_gate_named_at: "AM GATE {gate} @{icao}",
+ 
+ 
+     },
+     en: {
+@@
+ 	  status_gate_named: "AT GATE {gate}",
+       status_landed_gate: "LANDED (GATE {gate})",
+ 	  status_taxi: "TAXI",
+       status_gate_plain: "AT GATE",
++      status_gate_plain_at: "AT GATE @{icao}",
+       status_gate_named_at: "AT GATE {gate} @{icao}",
+     }
+   };
+@@
+   function plannedEtaTs(stdTs, enrouteHHMM){
+     const durMin = parseDurationHHMM(enrouteHHMM);
+     if(stdTs == null || durMin == null) return null;
+     return stdTs + durMin*60000;
+   }
+ 
++  /********************
++   * DEP Time Logic (STD/ETD on ground, ETA after departure)
++   ********************/
++  function computeSmartEtdTsForTaxi(stdTs, refMs=Date.now()){
++    // Wenn der Flieger rollt (TAXI), soll die Zeit nahe "jetzt" liegen,
++    // falls STD unplausibel ist (zu weit in Zukunft / verstrichen).
++    const now = refMs;
++    const NEAR_NOW_MS = 2 * 60 * 1000; // ETD ~ now+2min
++    if(stdTs == null || !isFinite(stdTs)) return now + NEAR_NOW_MS;
++    const diff = stdTs - now;
++    // STD gilt als unplausibel, wenn:
++    // - mehr als 8min in der Vergangenheit ODER
++    // - mehr als 25min in der Zukunft (während TAXI)
++    if(diff < -8*60*1000 || diff > 25*60*1000) return now + NEAR_NOW_MS;
++    return stdTs;
++  }
++
++  function depTimeTsForDisplay(f){
++    const phase = f.status?.phase || "UNK";
++    if(f.status?.finished){
++      // bleibt unten; Zeit kann ETA/Planned/STD sein
++      return (f.etaTs ?? f.etaPlannedTs ?? f.stdTs ?? null);
++    }
++    // Am Boden: STD bzw. (bei TAXI) ETD
++    if(phase === "TAXI" || phase === "GATE" || phase === "PREFILE"){
++      return (f.etdTs ?? f.stdTs ?? null);
++    }
++    // Abgeflogen: ETA am Destination Airport
++    return (f.etaTs ?? f.etaPlannedTs ?? null);
++  }
++
++  function depTimeTsForSort(f){
++    const phase = f.status?.phase || "UNK";
++    if(phase === "TAXI" || phase === "GATE" || phase === "PREFILE"){
++      return (f.etdTs ?? f.stdTs ?? null);
++    }
++    return (f.etaTs ?? f.etaPlannedTs ?? f.stdTs ?? null);
++  }
++
+@@
+   function classifyFlight(p, boardType){
+@@
+     if(boardType === "dep"){
+       if(p.__prefile) cand = { phase:"PREFILE", rank:0, text: statusTxt("prefile"), cls:"info", finished:false };
+-else if(onGround && nearDep){
+-  const taxiSure = !!groundState?.taxiSure;
+-  const atGateSure = !!groundState?.isStationary;
+-
+-  let txt;
+-  if(taxiSure){
+-    txt = statusTxt("taxi");
+-  }else if(atGateSure){
+-    txt = gateLabel ? statusTxt("gate_named", { gate: gateLabel }) : statusTxt("gate_plain");
+-  }else{
+-    txt = statusTxt("gate"); // Fallback: Am Gate / Taxi
+-  }
+-
+-  cand = { phase:"GATE", rank:0, text: txt, cls:"info", finished:false };
+-}
++      else if(onGround && nearDep){
++        const taxiSure = !!groundState?.taxiSure;
++        const atGateSure = !!groundState?.isStationary;
++
++        let txt;
++        let ph = "GATE";
++        if(taxiSure){
++          txt = statusTxt("taxi");
++          ph = "TAXI"; // getrennt, damit TAXI in der Sortierung über GATE steht
++        }else if(atGateSure){
++          txt = gateLabel ? statusTxt("gate_named", { gate: gateLabel }) : statusTxt("gate_plain");
++          ph = "GATE";
++        }else{
++          txt = statusTxt("gate"); // Fallback: Am Gate / Taxi
++          ph = "GATE";
++        }
++
++        cand = { phase:ph, rank:0, text: txt, cls:"info", finished:false };
++      }
+       else if(airborne && inDepZone){
+         if(alt < 7000) cand = { phase:"DEPARTING", rank:1, text: statusTxt("departing"), cls:"warn", finished:false };
+         else cand = { phase:"CLIMB", rank:1, text: statusTxt("climb"), cls:"warn", finished:false };
+       }
+@@
+ } else if(nearDep) {
+   const taxiSure = !!groundState?.taxiSure;
+   const atGateSure = !!groundState?.isStationary;
+ 
+   let txt;
+   if(taxiSure){
+     txt = statusTxt("taxi");
+   }else if(atGateSure){
+     // NUR wenn Gate angezeigt wird: "@ICAO" anhängen (Requirement)
+     txt = gateLabel
+       ? statusTxt("gate_named_at", { gate: gateLabel, icao: dep })
+-      : statusTxt("gate_plain");
++      : statusTxt("gate_plain_at", { icao: dep }); // Fallback: "AM GATE @<ICAO>"
+   }else{
+     txt = statusTxt("gate"); // Fallback: Am Gate / Taxi
+   }
+ 
+   cand = { phase:"GATE", rank:6, text: txt, cls:"info", finished:false };
+ }
+@@
+   }
+ 
+   // ETA Logic
+   let etaMemory = new Map();
+   function etaKey(cid, boardType){ return `eta:${boardType}:${String(cid)}`; }
+@@
+   function computeDynamicEtaTs(p, destAp, phase){
+@@
+     const factor = (phase==="FINAL") ? 1.16 : (phase==="APPROACH") ? 1.12 : (phase==="DESCENT") ? 1.08 : (phase==="DEPAREA") ? 1.10 : 1.05;
+     return now + (distNm / speed) * 60 * factor * 60000;
+   }
+-  function applyEtaForFlight(f, focusAp, boardType){
+-    if(boardType !== "arr") return;
+-    const now = Date.now();
+-    const phase = f.status?.phase || "UNK";
+-    let cand = null;
+-    if(f.status?.finished){
+-      const lu = f.pilot?.last_updated ? new Date(f.pilot.last_updated).getTime() : null;
+-      cand = isFinite(lu) ? lu : (f.etaPlannedTs ?? null);
+-    } else if(f.__prefile){
+-      cand = f.etaPlannedTs ?? null;
+-    } else if((f.dFromPlanNm != null && f.dFromPlanNm <= (STATUS_BANDS.NEAR_APT_NM + 3)) && Number(f.pilot?.altitude || 0) < 2500 && Number(f.pilot?.groundspeed || 0) < 120){
+-      const durMin = parseDurationHHMM(f.fp?.enroute_time || "");
+-      if(durMin != null){
+-        const baseDep = (f.stdTs != null && f.stdTs > (now - 10*60000)) ? f.stdTs : now;
+-        cand = baseDep + durMin*60000;
+-      }else{ cand = f.etaPlannedTs ?? null; }
+-    } else {
+-      cand = computeDynamicEtaTs(f.pilot, focusAp, phase);
+-      if(isFinite(cand) && isFinite(f.etaPlannedTs) && Math.abs(f.etaPlannedTs - cand) < 4*3600*1000) cand = cand*0.70 + f.etaPlannedTs*0.30;
+-      else if(!isFinite(cand)) cand = f.etaPlannedTs ?? null;
+-      if(isFinite(cand) && cand < (now - 2*60*1000)) cand = now + 2*60*1000;
+-    }
+-    const sm = stabilizeEta(etaKey(f.cid, boardType), cand, phase);
+-    f.etaTs = sm;
+-    f.etaText = sm != null ? fmtHHMMPlusText(sm) : "—";
+-  }
++  function applyEtaForFlight(f, destAp, boardType){
++    // boardType: "arr" = ETA zum Fokus-Airport, "dep" = ETA zum Destination-Airport
++    const now = Date.now();
++    const phase = f.status?.phase || "UNK";
++    const isDep = (boardType === "dep");
++    let cand = null;
++
++    if(!destAp){
++      cand = f.etaPlannedTs ?? null;
++      const sm0 = stabilizeEta(etaKey(f.cid, boardType), cand, phase);
++      f.etaTs = sm0;
++      f.etaText = sm0 != null ? fmtHHMMPlusText(sm0) : "—";
++      return;
++    }
++
++    if(f.status?.finished){
++      // Wenn gelandet/finished: nimm last_updated als "Arrival Timestamp", sonst planned ETA
++      const lu = f.pilot?.last_updated ? new Date(f.pilot.last_updated).getTime() : null;
++      cand = isFinite(lu) ? lu : (f.etaPlannedTs ?? null);
++    } else if(f.__prefile || phase === "PREFILE"){
++      cand = f.etaPlannedTs ?? null;
++    } else if(isDep && (phase === "GATE" || phase === "TAXI")){
++      // Departures am Boden: ETA aus (E)TD + EET
++      const durMin = parseDurationHHMM(f.fp?.enroute_time || "");
++      if(durMin != null){
++        const baseDep = (f.etdTs != null && isFinite(f.etdTs)) ? f.etdTs
++                      : (f.stdTs != null && isFinite(f.stdTs)) ? f.stdTs
++                      : now;
++        cand = baseDep + durMin*60000;
++      }else{
++        cand = f.etaPlannedTs ?? null;
++      }
++    } else if(!isDep && (f.dFromPlanNm != null && f.dFromPlanNm <= (STATUS_BANDS.NEAR_APT_NM + 3)) && Number(f.pilot?.altitude || 0) < 2500 && Number(f.pilot?.groundspeed || 0) < 120){
++      // Arrivals: noch am Origin => ETA aus STD/jetzt + EET
++      const durMin = parseDurationHHMM(f.fp?.enroute_time || "");
++      if(durMin != null){
++        const baseDep = (f.stdTs != null && f.stdTs > (now - 10*60000)) ? f.stdTs : now;
++        cand = baseDep + durMin*60000;
++      }else{
++        cand = f.etaPlannedTs ?? null;
++      }
++    } else {
++      // Airborne (oder allgemein unterwegs): dynamische ETA
++      cand = computeDynamicEtaTs(f.pilot, destAp, phase);
++      if(isFinite(cand) && isFinite(f.etaPlannedTs) && Math.abs(f.etaPlannedTs - cand) < 4*3600*1000){
++        cand = cand*0.70 + f.etaPlannedTs*0.30;
++      }else if(!isFinite(cand)){
++        cand = f.etaPlannedTs ?? null;
++      }
++      if(isFinite(cand) && cand < (now - 2*60*1000)) cand = now + 2*60*1000;
++    }
++
++    const sm = stabilizeEta(etaKey(f.cid, boardType), cand, phase);
++    f.etaTs = sm;
++    f.etaText = sm != null ? fmtHHMMPlusText(sm) : "—";
++  }
+ 
+   // Sorting
+   const ARR_PHASE_ORDER = { GOAROUND:0, FINAL:1, APPROACH:2, DESCENT:3, CRUISE:4, DEPAREA:5, PREFILE:6, GATE:7, UNK:90, FINISHED:99 };
+-  const DEP_PHASE_ORDER = { PREFILE:0, GATE:1, DEPARTING:2, CLIMB:3, CRUISE:4, DESCENT:5, APPROACH:6, FINAL:7, GOAROUND:6, UNK:90, FINISHED:99 };
++  // Departures: oben TAXI, dann GATE, dann PREFILE, dann DEPARTING/CLIMB/CRUISE/... und unten FINAL; FINISHED bleibt immer ganz unten (ausgegraut)
++  const DEP_PHASE_ORDER = { TAXI:0, GATE:1, PREFILE:2, DEPARTING:3, CLIMB:4, CRUISE:5, DESCENT:6, APPROACH:7, FINAL:8, GOAROUND:7, UNK:90, FINISHED:99 };
+   function statusSensibleKey(f, boardType){
+     const phase = f.status?.phase || "UNK";
+     const base = (boardType==="arr") ? (ARR_PHASE_ORDER[phase] ?? 90) : (DEP_PHASE_ORDER[phase] ?? 90);
+     let sub = 9e12;
+     if(boardType === "arr"){
+       if(phase==="FINAL" || phase==="APPROACH" || phase==="DESCENT" || phase==="GOAROUND") sub = Math.floor((f.dToFocusNm ?? 9999) * 1000);
+       else { const ts = (f.etaTs ?? f.etaPlannedTs ?? null); sub = ts != null ? Math.floor(ts/1000) : 9e12; }
+     } else {
+-      if(phase==="GATE" || phase==="PREFILE") { const ts = f.stdTs ?? null; sub = ts != null ? Math.floor(ts/1000) : 9e12; }
+-      else if(phase==="DEPARTING" || phase==="CLIMB") sub = Math.floor((f.dFromFocusNm ?? 9999) * 1000);
+-      else sub = Math.floor((f.dToPlanNm ?? 9999) * 1000);
++      // Departures: am Boden nach (E)TD sortieren; nach Abflug nach ETA am Ziel sortieren
++      if(phase==="TAXI" || phase==="GATE" || phase==="PREFILE"){
++        const ts = (f.etdTs ?? f.stdTs ?? null);
++        sub = ts != null ? Math.floor(ts/1000) : 9e12;
++      }else{
++        const ts = (f.etaTs ?? f.etaPlannedTs ?? null);
++        sub = ts != null ? Math.floor(ts/1000) : 9e12;
++      }
+     }
+     return base*1e12 + sub;
+   }
+   function sortFlights(list, {by, dir}, boardType){
+     const d = dir || 1;
+     const coll = [...list];
+     const keyFn = (f) => {
+       if(by === "status") return statusSensibleKey(f, boardType);
+       if(by === "callsign") return f.callsign;
+       if(by === "dest") return f.arr;
+       if(by === "orig") return f.dep;
+       if(by === "xp") return (f.exp?.score ?? -1);
+-      if(by === "time") return (boardType === "dep" ? (f.stdTs ?? 9e15) : (f.etaTs ?? f.etaPlannedTs ?? 9e15));
++      if(by === "time") return (boardType === "dep" ? (depTimeTsForSort(f) ?? 9e15) : (f.etaTs ?? f.etaPlannedTs ?? 9e15));
+       return 0;
+     };
+     coll.sort((a,b) => {
+       const fa = a.status?.finished ? 1 : 0;
+       const fb = b.status?.finished ? 1 : 0;
+       if(fa !== fb) return fa - fb;
+       const ka = keyFn(a); const kb = keyFn(b);
+       if(typeof ka === "number" && typeof kb === "number"){ if(ka !== kb) return d * (ka - kb); }
+       else { const sa = String(ka ?? ""), sb = String(kb ?? ""); const c = sa.localeCompare(sb, "en", { sensitivity:"base" }); if(c !== 0) return d * c; }
+-      const ta = (boardType === "dep") ? (a.stdTs ?? 9e15) : (a.etaTs ?? a.etaPlannedTs ?? 9e15);
+-      const tb = (boardType === "dep") ? (b.stdTs ?? 9e15) : (b.etaTs ?? b.etaPlannedTs ?? 9e15);
++      const ta = (boardType === "dep") ? (depTimeTsForSort(a) ?? 9e15) : (a.etaTs ?? a.etaPlannedTs ?? 9e15);
++      const tb = (boardType === "dep") ? (depTimeTsForSort(b) ?? 9e15) : (b.etaTs ?? b.etaPlannedTs ?? 9e15);
+       if(ta !== tb) return ta - tb;
+       return a.callsign.localeCompare(b.callsign, "en", { sensitivity:"base" });
+     });
+     return coll;
+   }
+@@
+     updateRow(tr, f){
+@@
+       const c = tr.__cells;
+ 
+       if(c.time){
+-        const ts = (this.boardType === "dep") ? f.stdTs : (f.etaTs ?? f.etaPlannedTs);
++        const ts = (this.boardType === "dep")
++          ? depTimeTsForDisplay(f)
++          : (f.etaTs ?? f.etaPlannedTs);
+         c.time.innerHTML = fmtHHMMPlusHtml(ts);
+       }
+@@
+   async function refresh(){
+@@
+         if(dep === focus){
+           const f = buildFlightObjectFromPilot(p);
+           f.status = classifyFlight(p, "dep");
+           if(focusAp && isFinite(p.latitude) && isFinite(p.longitude)) f.dFromFocusNm = haversineNm(Number(p.latitude), Number(p.longitude), focusAp.latitude, focusAp.longitude);
+           const arrAp = getAirport(arr);
+           if(arrAp) f.dToPlanNm = haversineNm(Number(p.latitude), Number(p.longitude), arrAp.latitude, arrAp.longitude);
++          // Smart ETD für TAXI (wenn STD unplausibel)
++          if(f.status?.phase === "TAXI"){
++            f.etdTs = computeSmartEtdTsForTaxi(f.stdTs, Date.now());
++          }else{
++            f.etdTs = f.stdTs ?? null;
++          }
++          // ETA zum Destination Airport berechnen (für Anzeige nach Abflug)
++          applyEtaForFlight(f, arrAp, "dep");
+           applyCachedXpIfAvailable(f);
+           if(!(settings.hideDeparturesFinished && f.status.finished)){
+             deps.push(f);
+             if(!flightsByCid.has(String(f.cid))) flightsByCid.set(String(f.cid), []);
+             flightsByCid.get(String(f.cid)).push(f);
+           }
+         }
+@@
+         if(arr === focus){
+           const f = buildFlightObjectFromPilot(p);
+           f.status = classifyFlight(p, "arr");
+           if(focusAp && isFinite(p.latitude) && isFinite(p.longitude)) f.dToFocusNm = haversineNm(Number(p.latitude), Number(p.longitude), focusAp.latitude, focusAp.longitude);
+           const depAp = getAirport(dep);
+           if(depAp) f.dFromPlanNm = haversineNm(Number(p.latitude), Number(p.longitude), depAp.latitude, depAp.longitude);
+-          applyEtaForFlight(f, focusAp, "arr");
++          applyEtaForFlight(f, focusAp, "arr");
+           applyCachedXpIfAvailable(f);
+           if(!(settings.hideArrivalsLanded && f.status.finished)){
+             arrs.push(f);
+             if(!flightsByCid.has(String(f.cid))) flightsByCid.set(String(f.cid), []);
+             flightsByCid.get(String(f.cid)).push(f);
+           }
+         }
+       }
+@@
+       if(settings.showPrefiles){
+         for(const pf of prefiles){
+@@
+           if(dep === focus){
+             const f = buildFlightObjectFromPrefile(pf);
+             // classify based on prefile stub
+             f.status = classifyFlight({ ...f.pilot, cid: f.cid, flight_plan: f.fp }, "dep");
++            // Prefile: ETD=STD, ETA=planned
++            f.etdTs = f.stdTs ?? null;
++            applyEtaForFlight(f, getAirport(f.arr), "dep");
+             applyCachedXpIfAvailable(f);
+             deps.push(f);
+             if(!flightsByCid.has(String(f.cid))) flightsByCid.set(String(f.cid), []);
+             flightsByCid.get(String(f.cid)).push(f);
+           }
+*** End Patch
