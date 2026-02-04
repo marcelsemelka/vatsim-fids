@@ -1,0 +1,270 @@
+{
+  "EGLL": {
+    "09L": {
+      "landing": {
+        "status": "ALLOWED",
+        "priority": 1,
+        "restrictions": [],
+        "comment": "During Easterly operations, 09L is the designated landing runway (Cranford legacy prevents departures)"
+      },
+      "takeoff": {
+        "status": "FORBIDDEN",
+        "restrictions": [],
+        "comment": "Departures on 09L prohibited due to Cranford Agreement (noise protection for Cranford village)"
+      }
+    },
+    "09R": {
+      "landing": {
+        "status": "FORBIDDEN",
+        "restrictions": [],
+        "comment": "During Easterly operations, 09R is dedicated for departures only"
+      },
+      "takeoff": {
+        "status": "ALLOWED",
+        "priority": 1,
+        "restrictions": []
+      }
+    },
+    "27L": {
+      "landing": {
+        "status": "RESTRICTED",
+        "restrictions": [
+          {
+            "type": "TIME_UTC",
+            "condition": "ALTERNATION_WEEKLY",
+            "comment": "Runway alternates between Landing and Takeoff daily at 15:00 Local. Requires external week-parity logic."
+          }
+        ]
+      },
+      "takeoff": {
+        "status": "ALLOWED",
+        "priority": 1,
+        "restrictions": []
+      }
+    }
+  },
+  "LEMD": {
+    "32L": {
+      "landing": {
+        "status": "ALLOWED",
+        "priority": 1,
+        "restrictions": [
+          {
+            "type": "METAR_WIND",
+            "condition": "TAILWIND_LIMIT",
+            "limit_kt": 10,
+            "enforcement": "REQUIRED_FOR_USE",
+            "comment": "Primary Landing Runway in North Configuration"
+          }
+        ]
+      },
+      "takeoff": {
+        "status": "FORBIDDEN",
+        "restrictions": []
+      }
+    },
+    "32R": {
+      "landing": {
+        "status": "ALLOWED",
+        "priority": 1,
+        "restrictions": [],
+        "comment": "Primary Landing Runway in North Configuration"
+      },
+      "takeoff": {
+        "status": "FORBIDDEN",
+        "restrictions": []
+      }
+    },
+    "36L": {
+      "landing": {
+        "status": "FORBIDDEN",
+        "restrictions": []
+      },
+      "takeoff": {
+        "status": "ALLOWED",
+        "priority": 1,
+        "restrictions": [],
+        "comment": "Dedicated Departure Runway in North Configuration"
+      }
+    },
+    "36R": {
+      "landing": {
+        "status": "FORBIDDEN",
+        "restrictions": []
+      },
+      "takeoff": {
+        "status": "ALLOWED",
+        "priority": 1,
+        "restrictions": [],
+        "comment": "Dedicated Departure Runway in North Configuration"
+      }
+    },
+    "18L": {
+      "landing": {
+        "status": "ALLOWED",
+        "priority": 2,
+        "restrictions": [
+           {
+            "type": "METAR_WIND",
+            "condition": "HEADWIND_REQUIRED",
+            "comment": "Only used during South Configuration (Tailwind on 32s > 10kt)"
+           }
+        ]
+      },
+      "takeoff": {
+        "status": "FORBIDDEN",
+        "restrictions": []
+      }
+    }
+  },
+  "KSFO": {
+    "28L": {
+      "landing": {
+        "status": "ALLOWED",
+        "priority": 1,
+        "restrictions": [],
+        "comment": "Primary arrival runway (West Plan)"
+      },
+      "takeoff": {
+        "status": "ALLOWED",
+        "priority": 2,
+        "restrictions": [],
+        "comment": "Used for heavy departures, but secondary to 01s"
+      }
+    },
+    "28R": {
+      "landing": {
+        "status": "ALLOWED",
+        "priority": 1,
+        "restrictions": [],
+        "comment": "Primary arrival runway (West Plan)"
+      },
+      "takeoff": {
+        "status": "ALLOWED",
+        "priority": 2,
+        "restrictions": []
+      }
+    },
+    "01L": {
+      "landing": {
+        "status": "FORBIDDEN",
+        "restrictions": [],
+        "comment": "Runway 01L/R strictly for departures in West Plan. Landings extremely rare due to terrain/traffic conflict."
+      },
+      "takeoff": {
+        "status": "ALLOWED",
+        "priority": 1,
+        "restrictions": []
+      }
+    },
+    "01R": {
+      "landing": {
+        "status": "FORBIDDEN",
+        "restrictions": []
+      },
+      "takeoff": {
+        "status": "ALLOWED",
+        "priority": 1,
+        "restrictions": []
+      }
+    },
+    "10L": {
+      "landing": {
+        "status": "FORBIDDEN",
+        "restrictions": []
+      },
+      "takeoff": {
+        "status": "RESTRICTED",
+        "priority": 3,
+        "restrictions": [
+          {
+            "type": "TIME_UTC",
+            "start": "09:00",
+            "end": "14:00",
+            "enforcement": "REQUIRED_FOR_USE",
+            "comment": "Preferred Night Departure (01:00-06:00 Local) for noise abatement (Over Water)"
+          }
+        ]
+      }
+    }
+  },
+  "KBOS": {
+    "33L": {
+      "landing": {
+        "status": "ALLOWED",
+        "priority": 1,
+        "restrictions": [
+          {
+             "type": "METAR_WIND",
+             "condition": "SECTOR",
+             "from_deg": 270,
+             "to_deg": 360,
+             "enforcement": "REQUIRED_FOR_USE"
+          }
+        ],
+        "comment": "Dedicated arrival runway during NW flow"
+      },
+      "takeoff": {
+        "status": "FORBIDDEN",
+        "restrictions": [],
+        "comment": "Runway 33L is rarely used for departures (intersects active flows / noise)"
+      }
+    },
+    "15R": {
+      "landing": {
+        "status": "FORBIDDEN",
+        "restrictions": []
+      },
+      "takeoff": {
+        "status": "ALLOWED",
+        "priority": 1,
+        "restrictions": [
+           {
+             "type": "METAR_WIND",
+             "condition": "SECTOR",
+             "from_deg": 270,
+             "to_deg": 360,
+             "enforcement": "REQUIRED_FOR_USE",
+             "comment": "Used for departures even with slight tailwind to keep traffic over ocean (reciprocal to 33L Arrivals)"
+           }
+        ]
+      }
+    }
+  },
+  "LOWW": {
+    "16": {
+      "landing": {
+        "status": "ALLOWED",
+        "priority": 1,
+        "restrictions": [
+           {
+            "type": "METAR_WIND",
+            "condition": "CROSSWIND_LIMIT",
+            "limit_kt": 15,
+            "enforcement": "REQUIRED_FOR_USE"
+           }
+        ],
+        "comment": "Preferential Landing Runway (minimizes noise over Vienna)"
+      },
+      "takeoff": {
+        "status": "FORBIDDEN",
+        "restrictions": [],
+        "comment": "Departures usually on 29 or 34 to avoid city overflight"
+      }
+    },
+    "29": {
+      "landing": {
+        "status": "RESTRICTED",
+        "priority": 3,
+        "restrictions": [],
+        "comment": "Only used for landing if high winds prevent 16/34 usage"
+      },
+      "takeoff": {
+        "status": "ALLOWED",
+        "priority": 1,
+        "restrictions": [],
+        "comment": "Primary Departure Runway (Westbound)"
+      }
+    }
+  }
+}
