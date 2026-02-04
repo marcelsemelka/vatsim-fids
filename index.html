@@ -89,7 +89,8 @@
     .boardHeader { display: flex; align-items: center; justify-content: space-between; padding: 16px 20px; border-bottom: 1px solid var(--glass-border); background: rgba(255,255,255,0.02); }
     .boardHeader h2 { margin: 0; font-size: 14px; letter-spacing: 0.1em; text-transform: uppercase; font-weight: 700; color: var(--text-main); display: flex; align-items: center; gap: 8px; }
     .boardHeader h2::before { content:''; display:block; width:4px; height:16px; background:var(--primary); border-radius:2px; }
-    .runwayInfo { margin-left: 12px; font-size: 11px; font-weight: 500; color: var(--text-muted); font-family: var(--font-mono); background: rgba(0,0,0,0.2); padding: 2px 6px; border-radius: 4px; border: 1px solid rgba(255,255,255,0.05); }
+    .runwayInfo { margin-left: 12px; font-size: 12px; font-weight: 500; color: var(--text-muted); font-family: var(--font-mono); background: rgba(0,0,0,0.2); padding: 2px 6px; border-radius: 4px; border: 1px solid rgba(255,255,255,0.05); }
+    .runwayInfo.atisMode { background: var(--primary); color: #fff; border-color: transparent; font-weight: 700; text-shadow: 0 1px 2px rgba(0,0,0,0.2); }	
         .boardHeader .mini { display: flex; gap: 8px; align-items: center; }
 
     .hint { font-size: 11px; color: var(--text-muted); font-weight: 500; }
@@ -1902,16 +1903,16 @@ function predictRunways(icao, metar, history) {
     // Benötigt runwayIndex (wird asynchron geladen, hier best-effort sync check)
     const rIdx = runwayIndexByIcao.get(icao);
     if (!rIdx) { console.log(`RWY DEBUG PRED ${icao}: No Runway Index available`); return null; }
-    if (!metar || !metar.wdir) { console.log(`RWY DEBUG PRED ${icao}: No METAR/Wind`); return null; }
 
     // Wenn Historie vorhanden, prüfe ob der Wind ähnlich war und nimm die historische Config
     // (Vereinfachung: wir nehmen hier erstmal nur Wind-Logik als Fallback)
 
     // FIX: Support both raw METAR objects and cached objects with nested .wind property
-    const wDirVal = (metar.wind && metar.wind.dir !== undefined) ? metar.wind.dir : metar.wdir;
-    const wSpdVal = (metar.wind && metar.wind.spd !== undefined) ? metar.wind.spd : metar.wspd;
+    const wDirVal = (metar.wind && metar.wind.dir != null) ? metar.wind.dir : metar.wdir;
+    const wSpdVal = (metar.wind && metar.wind.spd != null) ? metar.wind.spd : metar.wspd;
+	
+    if (wDirVal == null) { console.log(`RWY DEBUG PRED ${icao}: No METAR/Wind available (Obj: ${JSON.stringify(metar)})`); return null; }	
 
-    if (wDirVal == null) { console.log(`RWY DEBUG PRED ${icao}: No METAR/Wind available`); return null; }
 
     const windDir = wDirVal === "VRB" ? 0 : Number(wDirVal);
     const windSpd = Number(wSpdVal || 0);
@@ -2138,7 +2139,7 @@ function renderRunwayInfo(icao, info, atisCode) {
     // Wir müssen das Tab-Element finden. Da `settings.airports` genutzt wird:
     if (document.getElementById("airportInputLabel")) {
         const lbl = document.getElementById("airportInputLabel");
-        // lbl.innerHTML = `Airport (ICAO) ${atisCode ? `<span class="badge info" style="padding:2px 6px; font-size:10px;">ATIS ${atisCode}</span>` : ""}`;
+        // lbl.innerHTML = `Airport (ICAO) ${atisCode ? `<span class="badge info" style="padding:2px 6px; font-size:11px;">ATIS ${atisCode}</span>` : ""}`;
     }
     // Update Active Tab Text
     const tabs = document.querySelectorAll(".airportTab");
@@ -2172,13 +2173,14 @@ function renderRunwayInfo(icao, info, atisCode) {
             const isPred = (info.source || "").includes("PRED");
             const icon = isPred ? "⚠ " : "";
             const title = isPred ? "Prognose basierend auf Wind" : "Aus ATIS geparst";
+            const modeClass = isPred ? "" : "atisMode";			
 
             // Helper für stabiles DOM-Update
             const updateHeader = (h2, label, str) => {
                 if(!h2) return;
                 // Wir bauen den kompletten HTML String für das Element
                 const newHtml = (str || isPred) 
-                    ? `<span class="runwayInfo" title="${title}">${icon}${label}: ${str || "-"}</span>` 
+                    ? `<span class="runwayInfo ${modeClass}" title="${title}">${icon}${label}: ${str || "-"}</span>` 
                     : ``;
                 
                 const exist = h2.querySelector(".runwayInfo");
@@ -5798,7 +5800,7 @@ else if(onGround && surfaceDep){
           const rIdx = runwayIndexByIcao.get(focusIcao);
           if(rIdx) {
             const tmp = { cid: String(p.cid), pilot: p, fp };
-            getRunwayTargetForFlight(tmp, rIdx, globalActiveRunways[icao]); // populates tmp with rw... props
+            getRunwayTargetForFlight(tmp, rIdx, globalActiveRunways[focusIcao]); // populates tmp with rw... props
             rwCtx = tmp;
           }
         }
