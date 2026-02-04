@@ -89,7 +89,8 @@
     .boardHeader { display: flex; align-items: center; justify-content: space-between; padding: 16px 20px; border-bottom: 1px solid var(--glass-border); background: rgba(255,255,255,0.02); }
     .boardHeader h2 { margin: 0; font-size: 14px; letter-spacing: 0.1em; text-transform: uppercase; font-weight: 700; color: var(--text-main); display: flex; align-items: center; gap: 8px; }
     .boardHeader h2::before { content:''; display:block; width:4px; height:16px; background:var(--primary); border-radius:2px; }
-    .boardHeader .mini { display: flex; gap: 8px; align-items: center; }
+    .runwayInfo { margin-left: 12px; font-size: 11px; font-weight: 500; color: var(--text-muted); font-family: var(--font-mono); background: rgba(0,0,0,0.2); padding: 2px 6px; border-radius: 4px; border: 1px solid rgba(255,255,255,0.05); }
+        .boardHeader .mini { display: flex; gap: 8px; align-items: center; }
 
     .hint { font-size: 11px; color: var(--text-muted); font-weight: 500; }
 
@@ -478,7 +479,8 @@
               <label style="display:flex; gap:8px; cursor:pointer;"><input id="cfgPrefiles" type="checkbox" /> <span id="cfgPrefilesText">Prefiles anzeigen</span></label>
               <label style="display:flex; gap:8px; cursor:pointer;"><input id="cfgHideArrLanded" type="checkbox" /> <span id="cfgHideArrText">Arr: Gelandete ausblenden</span></label>
               <label style="display:flex; gap:8px; cursor:pointer;"><input id="cfgHideDepFinished" type="checkbox" /> <span id="cfgHideDepText">Dep. Gelandete ausblenden</span></label>
-            </div>
+              <label style="display:flex; gap:8px; cursor:pointer;"><input id="cfgHidePredictive" type="checkbox" /> <span id="cfgHidePredictiveText">Prädiktive Runways ausblenden</span></label>
+                        </div>
           </div>
  <div class="colHelp" id="cfgDisplayHelp">Spalten ein-/ausblenden und Reihenfolge anpassen (wirkt nach „Speichern“).</div>
           <div style="display:grid; grid-template-columns: 1fr 1fr; gap:16px;">
@@ -579,6 +581,7 @@
     "https://corsproxy.io/?url="
   ];
   const AIRPORTS_URL = "https://cdn.jsdelivr.net/npm/airport-data@1.0.1/airports.json";
+  const METAR_API_URL = "https://aviationweather.gov/api/data/metar?ids={icao}&format=json";
 
   /********************
    * i18n
@@ -631,6 +634,7 @@
       cfg_prefiles: "Prefiles anzeigen",
       cfg_hide_arr: "Ankünfte: Gelandete ausblenden",
       cfg_hide_dep: "Abflüge: Gelandete ausblenden",
+      cfg_hide_pred: "Prädiktive Runways ausblenden",
       cfg_display_title: "Anzeige",
       cfg_display_help: "Spalten ein-/ausblenden und Reihenfolge anpassen (wirkt nach „Speichern“).",
       cfg_display_dep: "Departures Board",
@@ -725,6 +729,8 @@
           status_lineup: "LINEUP",
           status_lineup_rwy: "LINEUP RWY {rwy}",
           status_local: "LOCAL",
+          runway_info_pred: "⚠ PRED: {rwys}",
+      runway_loading: "Lade Runways...",
 
     },
     en: {
@@ -774,6 +780,7 @@
       cfg_prefiles: "Show prefiles",
       cfg_hide_arr: "Arrivals: Hide landed",
       cfg_hide_dep: "Departures: Hide landed",
+      cfg_hide_pred: "Hide predictive runways",
       cfg_display_title: "Display",
       cfg_display_help: "Toggle columns and adjust order (applies after “Save”).",
       cfg_display_dep: "Departures Board",
@@ -868,6 +875,8 @@
           status_lineup: "LINEUP",
           status_lineup_rwy: "LINEUP RWY {rwy}",
           status_local: "LOCAL",
+                  runway_info_pred: "⚠ PRED: {rwys}",
+                  runway_loading: "Loading runways...",
     }
   };
 
@@ -953,7 +962,7 @@ const DEP_QUEUE_PER_ACFT_SEC = 75;        // add ~1:15 per aircraft ahead (rough
 const OVERPASS_API = "https://overpass-api.de/api/interpreter";
 
 // OSM Query / Matching
-const OSM_GATE_QUERY_RADIUS_M = 6500;      // um Airport-Referenzpunkt
+const OSM_GATE_QUERY_RADIUS_M = 5000;      // um Airport-Referenzpunkt
 const GATE_MATCH_RADIUS_M = 40;            // max Distanz Gate <-> Flugposition
 
 // Stationary / Taxi-Erkennung
@@ -1012,6 +1021,10 @@ const GATE_JITTER_GRACE_MS = 20 * 1000;    // kurzzeitig minimal bewegt -> Gate 
 
   const BOARD_COL_KEYS = ["time","callsign","ap","typeRoute","altgs","status","xp"];
 
+  // Database / Cache Keys for new Features
+  const METAR_CACHE_KEY = "vatsimFids_metarCache_v1";
+  const ACT_RUNWAY_CACHE_KEY = "vatsimFids_actRunwayCache_v1";
+
   /********************
    * MySQL Database Sync
    ********************/
@@ -1051,6 +1064,7 @@ const GATE_JITTER_GRACE_MS = 20 * 1000;    // kurzzeitig minimal bewegt -> Gate 
     showPrefiles: false,
     hideArrivalsLanded: false,
     hideDeparturesFinished: false,
+    hidePredictiveRunways: false,
     depSort: { by:"status", dir: 1 },
     arrSort: { by:"status", dir: 1 },
     memberTtlStatsMs: 5 * 24 * 3600 * 1000,
@@ -1175,6 +1189,18 @@ const GATE_JITTER_GRACE_MS = 20 * 1000;    // kurzzeitig minimal bewegt -> Gate 
 
   let settings = loadSettings();
   let memberCache = {}; // Initial leer, wird in boot() geladen
+  let currentVatsimData = null; // Speichert den letzten Feed für Config-Reloads
+  // Global store for active runways per airport (for ETD calc)
+  let globalActiveRunways = {};
+
+  // Style für Spinner im Header
+  const style = document.createElement('style');
+  style.innerHTML = `
+    .runwaySpinner { display:inline-block; width:10px; height:10px; border:2px solid rgba(255,255,255,0.3); border-top-color:#fff; border-radius:50%; animation:spin 1s linear infinite; margin-right:5px; vertical-align:middle; }
+    @keyframes spin { to { transform: rotate(360deg); } }
+  `;
+  document.head.appendChild(style);
+
 
   /********************
    * UI Hooks
@@ -1245,6 +1271,7 @@ const GATE_JITTER_GRACE_MS = 20 * 1000;    // kurzzeitig minimal bewegt -> Gate 
   const cfgPrefiles = document.getElementById("cfgPrefiles");
   const cfgHideArrLanded = document.getElementById("cfgHideArrLanded");
   const cfgHideDepFinished = document.getElementById("cfgHideDepFinished");
+  const cfgHidePredictive = document.getElementById("cfgHidePredictive");
   const cfgT1 = document.getElementById("cfgT1");
   const cfgT2 = document.getElementById("cfgT2");
   const cfgT3 = document.getElementById("cfgT3");
@@ -1274,6 +1301,7 @@ const GATE_JITTER_GRACE_MS = 20 * 1000;    // kurzzeitig minimal bewegt -> Gate 
   const cfgPrefilesText = document.getElementById("cfgPrefilesText");
   const cfgHideArrText = document.getElementById("cfgHideArrText");
   const cfgHideDepText = document.getElementById("cfgHideDepText");
+  const cfgHidePredictiveText = document.getElementById("cfgHidePredictiveText");
   const cfgDisplayTitle = document.getElementById("cfgDisplayTitle");
   const cfgDisplayHelp = document.getElementById("cfgDisplayHelp");
   const cfgDisplayDepTitle = document.getElementById("cfgDisplayDepTitle");
@@ -1543,6 +1571,7 @@ const GATE_JITTER_GRACE_MS = 20 * 1000;    // kurzzeitig minimal bewegt -> Gate 
     cfgPrefilesText.textContent = t("cfg_prefiles");
     cfgHideArrText.textContent = t("cfg_hide_arr");
     cfgHideDepText.textContent = t("cfg_hide_dep");
+    cfgHidePredictiveText.textContent = t("cfg_hide_pred");
     cfgDisplayTitle.textContent = t("cfg_display_title");
     cfgDisplayHelp.textContent = t("cfg_display_help");
     cfgDisplayDepTitle.textContent = t("cfg_display_dep");
@@ -1697,6 +1726,484 @@ const GATE_JITTER_GRACE_MS = 20 * 1000;    // kurzzeitig minimal bewegt -> Gate 
     if(best && bestD <= maxNm) return { ap: best, nm: bestD };
     return null;
   }
+
+  // Eigener Fetcher für METAR (Bypass global limiter)
+  async function fetchMetarDirect(icao) {
+    icao = normalizeCode(icao);
+    // Cache-Buster um aggressive Browser-Caches zu umgehen
+    const url = METAR_API_URL.replace("{icao}", icao) + "&_" + Date.now();
+    // Direkt via Proxy ohne Queue
+    const finalUrl = CORS_PROXY + encodeURIComponent(url);
+    try {
+      const res = await fetch(finalUrl, { cache: "no-store" });
+      if (!res.ok) return null;
+      const json = await res.json();
+      return (Array.isArray(json) && json.length > 0) ? json[0] : null;
+    } catch (e) {
+      console.warn("METAR fetch err:", e);
+      return null;
+    }
+  }
+
+/********************
+ * METAR & RUNWAY Logic
+ ********************/
+
+// Helper: DB/Cache Abstraktion für METAR/Runways
+async function loadDataFromDbOrLocal(key) {
+  if (DB_CONFIG.enabled) {
+    const remote = await dbLoad(key);
+    if (remote) {
+      // Remote vorhanden -> Local cleanen um Platz zu sparen
+      pruneLocalIfDbActive(key);
+      return remote;
+    }
+  }
+  try { return JSON.parse(localStorage.getItem(key) || "{}"); } catch { return {}; }
+}
+
+async function saveDataToDbAndCleanLocal(key, data) {
+  if (DB_CONFIG.enabled) {
+    const ok = await dbSave(key, data);
+    if (ok) pruneLocalIfDbActive(key);
+  } else {
+    try { localStorage.setItem(key, JSON.stringify(data)); } catch(e) {}
+  }
+}
+
+
+function parseActiveRunways(station) {
+    // 1. Text Vorbereitung
+    let rawText = Array.isArray(station.text_atis) ? station.text_atis.join(" ") : (station.text_atis || "");
+    if (!rawText) return { station: station.callsign, arrivals: [], departures: [] };
+
+    // Alles in Großbuchstaben und doppelte Leerzeichen entfernen
+    let cleanText = rawText.toUpperCase().replace(/\s+/g, ' ').trim();
+
+    // 2. Pre-Processing / Sanitizing
+    // A. Closed Runways
+    // Entfernt Zeilen wie "RWY 09R AND 09C CLSD" komplett, damit die Zahlen nicht gematched werden.
+    // Wir erlauben AND, &, Komma und Leerzeichen zwischen den Runways vor dem CLSD keyword.
+    cleanText = cleanText.replace(/(?:RWY|RUNWAY|RWYS|TWY|TAXIWAY)\s+(?:[0-9]{2}[LCR]?|(?:\s+(?:AND|&|,)\s+)|[\s,])+(?:CLSD|CLOSED|NOT\sAVBL|NOT\sAVAILABLE)/gi, " ");
+
+    // B. Conditions / Snow Reports entfernen
+    cleanText = cleanText.replace(/(?:RUNWAY CONDITION|RCR RWY|SNOW REPORT).*?(?=\.|APP|DEP|ARR|WIND|QNH|TL|TRL|VIS)/g, " ");
+    // C. Zahlen entfernen, die wie Runways aussehen, aber keine sind (Time, Wind, QNH, FL)
+    // TIME 1620 -> weg, QNH 1013 -> weg, 24005KT -> weg
+    cleanText = cleanText.replace(/TIME\s?[0-9]{4}/g, " ");
+    cleanText = cleanText.replace(/QNH\s?[0-9]{4}/g, " ");
+    cleanText = cleanText.replace(/[0-9]{3}(?:V[0-9]{3})?[0-9]{2}(?:G[0-9]{2})?KT/g, " "); // Wind
+    cleanText = cleanText.replace(/FL\s?[0-9]{2,3}/g, " ");
+
+    // D. L/R Expansion für einfacheres Matching (25 L/R -> 25L 25R)
+    cleanText = cleanText.replace(/([0-9]{2})\s?(?:L\/R|L\+R|L\s(?:AND|&)\sR|R\/L)/g, "$1L $1R");
+
+    // 3. Extraktions-Logik
+    const rwyPattern = /([0-9]{2}[LCR]?)/g;
+    // Helper zum Sammeln aller Matches einer Regex-Schleife
+    const collectMatches = (regex, groupIndex = 1) => {
+        let matches = [];
+        let m;
+        // Regex zurücksetzen
+        regex.lastIndex = 0;
+        while ((m = regex.exec(cleanText)) !== null) {
+            // groupIndex enthält die gefundene Runway oder Liste
+            let found = m[groupIndex].match(rwyPattern);
+            if (found) matches.push(...found);
+       }
+        // Validieren (01-36)
+        return matches.filter(r => {
+            let n = parseInt(r.substring(0,2), 10);
+            return n > 0 && n <= 36;
+        });
+    };
+
+    let arrMatches = [];
+    let depMatches = [];
+
+    // Strategie 1: Harte Keywords (LDG 15, TKOF 23, ARR RWY 25)
+    // KDFW: "EXPECT ILS TO RWYS, 36L, 35C..." -> Komma nach RWYS beachten
+
+    // ARR / LDG
+    // Sucht nach Keyword gefolgt von Runway(s)
+    const rgxArr = /(?:ARR|ARRIVAL|LANDING|LDG|EXPECT\s+(?:ILS|LOC|RNP|VISUAL|APP|APPROACH|VECTORS\sTO|INSTRUMENT\sAPP.*TO))\s+(?:TO|ON|IN|FOR|RWY|RUNWAY|RWYS|RUNWAYS)?[\s,]*([0-9]{2}[LCR]?(?:(?:[\s,]+(?:AND|&|OR)?[\s,]+)?[0-9]{2}[LCR]?)*)/g;
+    arrMatches.push(...collectMatches(rgxArr));
+
+    // DEP / TKOF
+    const rgxDep = /(?:DEP|DEPARTURE|TKOF|TAKEOFF|DEPG)\s+(?:TO|ON|IN|FOR|RWY|RUNWAY|RWYS|RUNWAYS)?[\s,]*([0-9]{2}[LCR]?(?:(?:[\s,]+(?:AND|&|OR)?[\s,]+)?[0-9]{2}[LCR]?)*)/g;
+    depMatches.push(...collectMatches(rgxDep));
+
+    // Strategie 2: Listen-Parsing (Runway 25 and 18)
+    // Wir suchen nach expliziten "Runway X and Y" Konstrukten für ARR/DEP Keywords
+    // Das ist komplexer, daher vereinfachen wir: Wenn Strategie 1 fehlgeschlagen ist oder ergänzend.
+    // Hier: "RUNWAYS IN USE 26L AND 26R" (EDDM)
+
+    if (arrMatches.length === 0 && depMatches.length === 0) {
+         const rgxGen = /(?:RWY|RUNWAY|RWYS)(?:\s+IN\s+USE|\s+ARE|\s+IS|:)\s+([0-9]{2}[LCR]?(?:(?:\s+AND|\s+OR|,|\s+)\s+[0-9]{2}[LCR]?)*)/g;
+        let genRes = collectMatches(rgxGen);
+        if (genRes.length > 0) {
+            arrMatches = genRes;
+            depMatches = genRes;
+        }
+    }
+
+    // Strategie 3: General Keywords (RWY 09L) - Fallback für EDDV
+    // Wenn bisher nichts gefunden wurde, suche nach "RWY XX" Mustern, die übrig geblieben sind (da CLOSED schon weg ist).
+    if (arrMatches.length === 0 && depMatches.length === 0) {
+        console.log(`RWY DEBUG ${station.callsign}: Strat 1/2 empty, trying Strat 3 (Simple) on:`, cleanText);
+        // Suche nach "RWY 09L" oder "RUNWAY 25" die nicht Teil eines CLSD Blocks waren
+        // Flexibler: RWY 09L (auch wenn danach Text kommt)
+        const rgxSimple = /(?:RWY|RUNWAY|RWYS)(?:\s+IN\s+USE|\s+ARE|\s+IS|:)?\s+([0-9]{2}[LCR]?(?:(?:\s+AND|\s+OR|,|\s+)\s+[0-9]{2}[LCR]?)*)/g;
+        let simpleRes = collectMatches(rgxSimple);
+        if (simpleRes.length > 0) {
+            arrMatches = simpleRes;
+            depMatches = simpleRes;
+        }
+    }
+
+    // Strategie 4: Bracket Format [RWY] 35 (Plugins)
+    if (arrMatches.length === 0 && depMatches.length === 0) {
+        const bracketRegex = /\[RWY\]\s*((?:[0-9]{2}[LCR]?(?:[\s,]+)?)+)/g;
+        let brackets = collectMatches(bracketRegex);
+        arrMatches.push(...brackets);
+        depMatches.push(...brackets);
+    }
+    console.log(`RWY DEBUG ${station.callsign}:`, {arr: arrMatches, dep: depMatches});
+    // 4. Deduplizierung und Zuweisung
+    arrMatches = [...new Set(arrMatches)];
+    depMatches = [...new Set(depMatches)];
+
+    let result = {
+        icao: station.callsign.split("_")[0],
+        type: "COMBINED",
+        atisCode: station.atis_code || "",
+        arrivals: [],
+        departures: []
+    };
+
+    if (/_D_ATIS$/.test(station.callsign)) {
+        result.type = "DEP_ONLY";
+        result.departures = depMatches.length > 0 ? depMatches : arrMatches;
+    }
+    else if (/_A_ATIS$/.test(station.callsign)) {
+        result.type = "ARR_ONLY";
+        result.arrivals = arrMatches.length > 0 ? arrMatches : depMatches;
+    }
+    else {
+        result.arrivals = arrMatches;
+        result.departures = depMatches;
+    }
+
+    return result;
+}
+
+function predictRunways(icao, metar, history) {
+    // Einfache Vorhersage basierend auf Wind (Headwind)
+    // Benötigt runwayIndex (wird asynchron geladen, hier best-effort sync check)
+    const rIdx = runwayIndexByIcao.get(icao);
+    if (!rIdx) { console.log(`RWY DEBUG PRED ${icao}: No Runway Index available`); return null; }
+    if (!metar || !metar.wdir) { console.log(`RWY DEBUG PRED ${icao}: No METAR/Wind`); return null; }
+
+    // Wenn Historie vorhanden, prüfe ob der Wind ähnlich war und nimm die historische Config
+    // (Vereinfachung: wir nehmen hier erstmal nur Wind-Logik als Fallback)
+
+    // FIX: Support both raw METAR objects and cached objects with nested .wind property
+    const wDirVal = (metar.wind && metar.wind.dir !== undefined) ? metar.wind.dir : metar.wdir;
+    const wSpdVal = (metar.wind && metar.wind.spd !== undefined) ? metar.wind.spd : metar.wspd;
+
+    if (wDirVal == null) { console.log(`RWY DEBUG PRED ${icao}: No METAR/Wind available`); return null; }
+
+    const windDir = wDirVal === "VRB" ? 0 : Number(wDirVal);
+    const windSpd = Number(wSpdVal || 0);
+	
+    let bestGroupScore = -999;
+    let bestGroup = null;
+    
+    // Group endpoints by numeric designator (e.g. "07L", "07R" -> "07")
+    const groups = {};
+    rIdx.endpoints.forEach(ep => {
+        const des = ep.designator;
+        const num = parseInt(des.substring(0, 2), 10);
+        if(!num) return;
+        const key = String(num).padStart(2, '0'); // "07"
+        if(!groups[key]) groups[key] = [];
+        if(!groups[key].includes(des)) groups[key].push(des);
+    });
+
+    // Evaluate each group
+
+    for (const [key, designators] of Object.entries(groups)) {
+        const num = parseInt(key) * 10;
+
+        // Headwind Component = Cos(WindDir - RwyHdg) * WindSpd
+        const diff = (windDir - num) * (Math.PI / 180);
+        const hw = Math.cos(diff) * windSpd;
+        
+        if(hw > bestGroupScore) {
+            bestGroupScore = hw;
+            bestGroup = designators;
+        }
+    }
+	
+    const bestRwy = bestGroup || [];	
+
+    console.log(`RWY DEBUG PRED ${icao}: Wind ${windDir}/${windSpd} ->`, bestRwy);
+    return {
+        arrivals: bestRwy,
+        departures: bestRwy,
+        isPrediction: true
+    };
+}
+
+async function updateAirportRunwayInfo(atisList = []) {
+    // 1. Laden der Caches
+    const [metarCache, rwyCache] = await Promise.all([
+        loadDataFromDbOrLocal(METAR_CACHE_KEY),
+        loadDataFromDbOrLocal(ACT_RUNWAY_CACHE_KEY)
+    ]);
+
+
+    const now = Date.now();
+    let metarDirty = false;
+    let rwyDirty = false;
+
+
+    // Wir iterieren über ALLE konfigurierten Airports, nicht nur den aktiven
+    const airports = settings.airports;
+
+    for (const ap of airports) {
+        const icao = normalizeCode(ap);
+        if (!icao) continue;
+
+        // FLICKER FIX & STALE-WHILE-REVALIDATE
+        // 1. Immer anzeigen was wir haben (auch wenn alt), damit UI stabil bleibt
+        const cachedRwy = rwyCache[icao]?.current;
+        if (cachedRwy) {
+            globalActiveRunways[icao] = cachedRwy;
+            renderRunwayInfo(icao, cachedRwy, cachedRwy.atisCode || null);
+        } else {
+            // Nur Spinner zeigen, wenn wir wirklich NICHTS haben
+            if (icao === settings.activeTab) renderLoadingRunways(icao);
+        }
+
+        // ALLE ATIS Stationen suchen (A_ATIS, D_ATIS, oder normale ATIS)
+        const stations = atisList.filter(a => a.callsign.startsWith(icao + "_") && a.callsign.endsWith("_ATIS"));
+
+        let rwyInfo = null;
+        let atisCode = null;
+        let needsUpdate = true;
+ 
+        // Check Age: Wenn Daten frisch (< 20 Min) und ATIS vorhanden (oder PRED valid), überspringen wir Fetch
+        if (cachedRwy) {
+            const age = now - (cachedRwy.ts || 0);
+            if (age < 20 * 60 * 1000) needsUpdate = false;
+        }
+
+        if (!needsUpdate) continue;		
+
+        // METAR Update nötig?
+        let mData = metarCache[icao];
+        if (!mData || (now - mData.ts) > 20 * 60 * 1000) {
+            // Wir fetchen asynchron, blockieren aber hier nicht ewig die UI
+            // In einer idealen Welt würden wir das Promises array sammeln und waiten,
+            // aber wir wollen schnelle Response. Wir triggern den Fetch, beim nächsten Interval ist er da.
+            // ODER wir warten kurz, da wir async sind.
+            const freshMetar = await fetchMetarDirect(icao);
+            if (freshMetar) {
+                console.log(`RWY DEBUG ${icao}: Fresh METAR fetched`, freshMetar.rawOb);
+                mData = {
+                    metar: freshMetar.rawOb || "",
+                    wind: { dir: freshMetar.wdir, spd: freshMetar.wspd },
+                    qnh: freshMetar.altim,
+                    ts: now
+                };
+                metarCache[icao] = mData;
+                metarDirty = true;
+            }
+        }
+
+        if (stations.length > 0) {
+            // Merge Logic für Split-ATIS (z.B. KDFW Arr/Dep)
+            let combinedArr = [];
+            let combinedDep = [];
+            let codes = new Set();
+
+            for(const st of stations){
+                const parsed = parseActiveRunways(st);
+                if(parsed.arrivals) combinedArr.push(...parsed.arrivals);
+                if(parsed.departures) combinedDep.push(...parsed.departures);
+                if(st.atis_code) codes.add(st.atis_code);
+            }
+
+            rwyInfo = {
+                icao: icao,
+                arrivals: [...new Set(combinedArr)].sort(),
+                departures: [...new Set(combinedDep)].sort(),
+                atisCode: Array.from(codes).sort().join("/")
+            };
+
+            // Codes joinen (z.B. "V" und "X" -> "V / X")
+            atisCode = rwyInfo.atisCode;
+
+            // FALLBACK: Wenn ATIS da ist, aber Parsing keine Runways lieferte (0/0)
+            // dann versuchen wir Prediction/Fallback, markieren es aber.
+            if ((!rwyInfo.arrivals.length && !rwyInfo.departures.length) && !settings.hidePredictiveRunways && mData) {
+            console.log(`RWY DEBUG ${icao}: ATIS empty parse, trying prediction...`);
+                        // Nur bei Single-Station ATIS Fallback probieren, bei Split-ATIS ist 0/0 unwahrscheinlich wenn Text da ist
+                 await ensureRunwayIndexForIcao(icao).catch(()=>{});
+                 const pred = predictRunways(icao, mData, rwyCache[icao]?.history);
+                 if (pred) {
+                     rwyInfo.arrivals = pred.arrivals;
+                     rwyInfo.departures = pred.departures;
+                     rwyInfo.source = "PRED (ATIS Parse Fail)";
+                 }
+            } else {
+                rwyInfo.source = "ATIS";
+            }
+
+            // In Historie speichern
+            if (!rwyCache[icao]) rwyCache[icao] = { history: [] };
+            rwyCache[icao].current = { ...rwyInfo, ts: now, atisCode };
+
+            // Nur in History schreiben, wenn wir wirklich etwas gefunden haben (kein leeres ATIS)
+            if (rwyInfo.arrivals.length > 0 || rwyInfo.departures.length > 0) {
+                rwyCache[icao].history.push({ ts: now, rwy: rwyInfo, wind: mData?.wind });
+                // History trimmen (6h)
+                rwyCache[icao].history = rwyCache[icao].history.filter(h => (now - h.ts) < 6 * 3600 * 1000);
+            }
+            rwyDirty = true;
+
+        } else {
+            // Keine ATIS -> Reiner Prediction Fallback
+            if (mData && !settings.hidePredictiveRunways) {
+                        console.log(`RWY DEBUG ${icao}: No ATIS, trying prediction...`);
+                await ensureRunwayIndexForIcao(icao).catch(()=>{});
+                const pred = predictRunways(icao, mData, rwyCache[icao]?.history);
+                if (pred) {
+                    rwyInfo = {
+                        arrivals: pred.arrivals,
+                        departures: pred.departures,
+                        source: "PRED"
+                    };
+                    // Cache auch Prediction
+                    if (!rwyCache[icao]) rwyCache[icao] = { history: [] };
+                    rwyCache[icao].current = { ...rwyInfo, ts: now, atisCode: null };
+                }
+            }
+        }
+
+        // UI Update für jeden Airport
+        if (rwyInfo) {
+            globalActiveRunways[icao] = rwyInfo;
+            renderRunwayInfo(icao, rwyInfo, atisCode);
+        }
+    } // end for
+
+
+    // Speichern
+    if (metarDirty) saveDataToDbAndCleanLocal(METAR_CACHE_KEY, metarCache);
+    if (rwyDirty) saveDataToDbAndCleanLocal(ACT_RUNWAY_CACHE_KEY, rwyCache);
+
+}
+
+function renderLoadingRunways(icao) {
+    // Zeigt Lade-Spinner im Header, nur wenn der Airport aktiv ist
+    if (icao !== settings.activeTab) return;
+
+    const depH2 = document.querySelector("#depTitle");
+    const arrH2 = document.querySelector("#arrTitle");
+    
+    const spinnerHtml = `<span class="runwayInfo"><span class="runwaySpinner"></span></span>`;
+
+    const inject = (parent) => {
+        if(!parent) return;
+        const exist = parent.querySelector(".runwayInfo");
+        // Wenn schon ein Spinner da ist, nichts tun (verhindert DOM-Thrashing)
+        if(exist && exist.innerHTML.includes("runwaySpinner")) return;
+        // Wenn was anderes da ist (alte Daten), oder nichts -> austauschen
+        if(exist) exist.outerHTML = spinnerHtml;
+        else parent.insertAdjacentHTML("beforeend", spinnerHtml);
+    };
+
+    inject(depH2);
+    inject(arrH2);
+}
+
+function renderRunwayInfo(icao, info, atisCode) {
+    // 1. ATIS Letter im Tab/Input updaten (Hack: wir suchen den Input, wenn es nur einen gibt, oder die Tabs)
+    // Da das Layout "Airport (Tabs)" nutzt, könnten wir den Titel des aktiven Tabs ändern?
+    // Einfacher: Wir setzen es hinter das Label oben links oder in die Brand-Subline temporär?
+    // Anforderung: "in den Tabs hinter dem ICAO Code dezent"
+
+    // Wir müssen das Tab-Element finden. Da `settings.airports` genutzt wird:
+    if (document.getElementById("airportInputLabel")) {
+        const lbl = document.getElementById("airportInputLabel");
+        // lbl.innerHTML = `Airport (ICAO) ${atisCode ? `<span class="badge info" style="padding:2px 6px; font-size:10px;">ATIS ${atisCode}</span>` : ""}`;
+    }
+    // Update Active Tab Text
+    const tabs = document.querySelectorAll(".airportTab");
+    tabs.forEach(t => {
+         const code = t.dataset.icao;
+         if(code === icao) {
+             // Nur DOM anfassen wenn nötig
+             const oldBadge = t.querySelector(".atisBadge");
+              if(atisCode) {
+                 const badgeHtml = ` <span class="badge atisBadge info" style="padding:1px 4px; font-size:9px; vertical-align:middle; background:var(--primary); color:#000; border-radius:2px;">${atisCode}</span>`;
+                 // Strict check to avoid re-parsing innerHTML breaking event listeners
+                 if(!oldBadge) t.insertAdjacentHTML("beforeend", badgeHtml);
+                 else if(oldBadge.textContent !== atisCode) oldBadge.textContent = atisCode;
+             } else {
+                 if(oldBadge) oldBadge.remove();
+             }
+        }
+    });
+
+    // 2. Board Header Runways (NUR update wenn dies der aktive Tab ist!)
+    if (icao === settings.activeTab) {
+
+        if (info && (Array.isArray(info.arrivals) || Array.isArray(info.departures))) {
+            const depStr = info.departures.join(", ");
+            const arrStr = info.arrivals.join(", ");
+
+            const depH2 = document.querySelector("#depTitle");
+            const arrH2 = document.querySelector("#arrTitle");
+
+            // Tooltip und Icon Logik
+            const isPred = (info.source || "").includes("PRED");
+            const icon = isPred ? "⚠ " : "";
+            const title = isPred ? "Prognose basierend auf Wind" : "Aus ATIS geparst";
+
+            // Helper für stabiles DOM-Update
+            const updateHeader = (h2, label, str) => {
+                if(!h2) return;
+                // Wir bauen den kompletten HTML String für das Element
+                const newHtml = (str || isPred) 
+                    ? `<span class="runwayInfo" title="${title}">${icon}${label}: ${str || "-"}</span>` 
+                    : ``;
+                
+                const exist = h2.querySelector(".runwayInfo");
+                
+                // Case 1: Wir wollen etwas anzeigen
+                if (newHtml) {
+                    if (exist) {
+                        // EXTREM WICHTIG: Nur ersetzen, wenn sich der String unterscheidet.
+                        // Das verhindert das Flackern des Browsers beim Re-Rendering.
+                        if (exist.outerHTML !== newHtml) exist.outerHTML = newHtml;
+                    } else {
+                        h2.insertAdjacentHTML('beforeend', newHtml);
+                    }
+                } 
+                // Case 2: Wir wollen nichts anzeigen (z.B. keine Runways und kein PRED)
+                else {
+                    if (exist) exist.remove();
+                }
+            };
+
+            updateHeader(depH2, "Dep", depStr);
+            updateHeader(arrH2, "Arr", arrStr);
+        }
+    }
+}
 
 const gatePrefetchAttempt = new Map(); // icao -> lastAttemptMs
 
@@ -2974,9 +3481,65 @@ out geom;
     return null;
   }
 
+  // NEW: Helper to stitch displaced thresholds (unnamed small chunks) onto main runways
+  function stitchRunwayGeometry(elements) {
+    const ways = elements.filter(e => e.type === "way" && Array.isArray(e.geometry) && e.geometry.length >= 2);
+    const named = [];
+    const orphans = [];
+
+    // 1. Separate Main Runways (Ref/Name) from Orphans
+    for(const w of ways) {
+        const tags = w.tags || {};
+        if(tags.ref || tags.name) named.push(w);
+        else orphans.push(w);
+    }
+
+    // 2. Try to stitch orphans to named runways
+    // We assume the orphan extends the runway at one end.
+    // Criteria: Distance < 30m AND Angle alignment < 10 degrees.
+    for(const orphan of orphans) {
+        const oStart = orphan.geometry[0];
+        const oEnd   = orphan.geometry[orphan.geometry.length-1];
+        const oBrg   = bearingDeg(oStart.lat, oStart.lon, oEnd.lat, oEnd.lon);
+        
+        let merged = false;
+        for(const main of named) {
+            const mStart = main.geometry[0];
+            const mEnd   = main.geometry[main.geometry.length-1];
+            const mBrg   = bearingDeg(mStart.lat, mStart.lon, mEnd.lat, mEnd.lon);
+
+            // Check alignment (must be parallel-ish)
+            const angDiff = angleDiffDeg(oBrg, mBrg);
+            if(angDiff > 10 && angDiff < 170) continue; // Not aligned
+
+            // Check Proximity: Orphan End <-> Main Start
+            if(haversineMeters(oEnd.lat, oEnd.lon, mStart.lat, mStart.lon) < 30) {
+                // Prepend orphan points to main
+                main.geometry = [...orphan.geometry, ...main.geometry]; 
+                merged = true;
+            }
+            // Check Proximity: Orphan Start <-> Main End
+            else if(haversineMeters(oStart.lat, oStart.lon, mEnd.lat, mEnd.lon) < 30) {
+                // Append orphan points to main
+                main.geometry = [...main.geometry, ...orphan.geometry];
+                merged = true;
+            }
+            // Also check inverted matching (if orphan is drawn reverse) -> simplified: 
+            // Since usually segments are drawn roughly consistent or short, the endpoint check covers most.
+            
+            if(merged) break; // Consumed this orphan
+        }
+    }
+    return named; // Return only the now-extended main runways
+  }
+
   function buildRunwayEndpointsFromElements(elements){
     const endpoints = [];
-    for(const el of (elements || [])){
+    
+    // 1. Stitch fragments before processing
+    const consolidated = stitchRunwayGeometry(elements || []);
+
+    for(const el of consolidated){
       if(el?.type !== "way") continue;
       const geom = Array.isArray(el.geometry) ? el.geometry : [];
       if(geom.length < 2) continue;
@@ -3000,8 +3563,17 @@ out geom;
       const rwBraw = pair ? pair[1] : (guessB || `RW:${el.id}:B`);
 
       // Normalize where possible for consistency ("5" -> "05")
-      const rwA = normalizeRunwayDesignator(rwAraw) || String(rwAraw).trim().toUpperCase();
-      const rwB = normalizeRunwayDesignator(rwBraw) || String(rwBraw).trim().toUpperCase();
+    let rwA = normalizeRunwayDesignator(rwAraw) || String(rwAraw).trim().toUpperCase();
+    let rwB = normalizeRunwayDesignator(rwBraw) || String(rwBraw).trim().toUpperCase();
+
+    // --- HARDCODED FIXES FOR OUTDATED OSM DATA ---
+    // EDDB hat von 07/25 auf 06/24 gewechselt. OSM liefert oft noch 07/25.
+    if (currentAirportIcao === "EDDB") {
+        const map = { "07L":"06L", "07R":"06R", "25L":"24L", "25R":"24R", "07":"06", "25":"24" };
+        if (map[rwA]) rwA = map[rwA];
+        if (map[rwB]) rwB = map[rwB];
+    }
+    // ---------------------------------------------
 
       const degA = runwayDesignatorToDeg(rwA);
       const degB = runwayDesignatorToDeg(rwB);
@@ -3233,7 +3805,7 @@ out geom tags;
     return m.stableKey;
   }
 
-  function pickBestRunwayEndpoint(cid, lat, lon, runwayIdx){
+  function pickBestRunwayEndpoint(cid, lat, lon, runwayIdx, activeRunways){
     if(!runwayIdx?.endpoints?.length) return null;
     if(!isFinite(lat) || !isFinite(lon)) return null;
 
@@ -3247,19 +3819,30 @@ out geom tags;
       const mNow = runwayEndpointMetric(lat, lon, ep, runwayIdx);
       const dNow = mNow.dNow;
       const metricNow = mNow.metric;
+	  
+      // Active Runway Weighting
+      // If ATIS/Prediction says this is active, boost it significantly.
+      let weightBonus = 0;
+      if(activeRunways && activeRunways.departures && activeRunways.departures.includes(ep.designator)) {
+          const isPred = (activeRunways.source || "").includes("PRED");
+          // Massive bonus for ATIS confirmed (8km), large for Pred (4km)
+          weightBonus = isPred ? 4000 : 8000;
+      }
+      const weightedMetric = metricNow - weightBonus;	  
+	  
       if(!isFinite(dNow) || dNow > RUNWAY_TARGET_MAX_CONSIDER_M) continue;
       if(!isFinite(metricNow)) continue;
 
-      if(!bestAny || metricNow < bestAny.metric){
-        bestAny = { ep, dNow, metric: metricNow, axisLatM: mNow.axisLat, approaching:false, gainM:0 };
+      if(!bestAny || weightedMetric < bestAny.metric){
+        bestAny = { ep, dNow, metric: weightedMetric, axisLatM: mNow.axisLat, approaching:false, gainM:0 };
       }
 
       if(prevOk){
         const mPrev = runwayEndpointMetric(prev.lat, prev.lon, ep, runwayIdx);
         const gainM = (mPrev.metric - metricNow); // positive => getting closer (includes axis stability)
         if(isFinite(gainM) && gainM >= RUNWAY_APPROACH_MIN_GAIN_M){
-          if(!bestApproach || metricNow < bestApproach.metric){
-            bestApproach = { ep, dNow, metric: metricNow, axisLatM: mNow.axisLat, approaching:true, gainM };
+          if(!bestApproach || weightedMetric < bestApproach.metric){
+            bestApproach = { ep, dNow, metric: weightedMetric, axisLatM: mNow.axisLat, approaching:true, gainM };
           }
         }
       }
@@ -3268,11 +3851,11 @@ out geom tags;
     return bestApproach || bestAny;
   }
 
-  function resolveRunwayTargetForCid(cid, lat, lon, runwayIdx){
+  function resolveRunwayTargetForCid(cid, lat, lon, runwayIdx, activeRunways){
     cid = String(cid);
     const now = Date.now();
 
-    const best = pickBestRunwayEndpoint(cid, lat, lon, runwayIdx);
+    const best = pickBestRunwayEndpoint(cid, lat, lon, runwayIdx, activeRunways);
     if(!best) return null;
 
     let m = runwayTargetMem.get(cid);
@@ -3331,13 +3914,13 @@ out geom tags;
     return best;
   }
 
-  function getRunwayTargetForFlight(f, runwayIdx){
+  function getRunwayTargetForFlight(f, runwayIdx, activeRunways){
     if(!f || !runwayIdx) return null;
     const p = f.pilot || null;
     const lat = Number(p?.latitude), lon = Number(p?.longitude);
     if(!isFinite(lat) || !isFinite(lon)) return null;
 
-    const r = resolveRunwayTargetForCid(f.cid, lat, lon, runwayIdx);
+    const r = resolveRunwayTargetForCid(f.cid, lat, lon, runwayIdx, activeRunways);
     if(!r?.ep) return null;
     // Track bearing (for “on runway roll” detection + better intersection robustness)
     const trackBrg = deriveTrackBearingDeg(f.cid, lat, lon, p?.heading ?? null);
@@ -3535,7 +4118,7 @@ out geom tags;
       const tm = taxiMem.get(String(g.cid)) || null;
       if(!tm?.taxiSince || (now - tm.taxiSince) < 60*1000) continue;
 
-      const tgt = getRunwayTargetForFlight(g, runwayIdx);
+      const tgt = getRunwayTargetForFlight(g, runwayIdx, globalActiveRunways[currentAirportIcao]);
       if(!tgt || tgt.queueKey !== queueKey || !isFinite(tgt.queueDistM)) continue;
       if(tgt.queueDistM > DEP_QUEUE_MAX_DIST_M) continue;
 
@@ -4366,7 +4949,8 @@ out geom tags;
 
     // Primary: runway-axis based (threshold + intersection aware)
     if(rIdx && flight?.pilot){
-      const tgt = getRunwayTargetForFlight(flight, rIdx);
+      const active = globalActiveRunways[focusIcao] || null;
+      const tgt = getRunwayTargetForFlight(flight, rIdx, active);
       const distM = tgt?.taxiDistM;
       if(isFinite(distM)){
         // NEW: If the aircraft is already rolling on the runway (after joining via an intersection),
@@ -4841,7 +5425,7 @@ out geom tags;
         flight_plan: fp,
         aircraft: fp?.aircraft_short || fp?.aircraft || ""
       };
-      const tgt = getRunwayTargetForFlight(f, rIdx);
+      const tgt = getRunwayTargetForFlight(f, rIdx, globalActiveRunways[icao]);
       if(!tgt) return null;
 
       // Must be tightly on runway axis.
@@ -5214,7 +5798,7 @@ else if(onGround && surfaceDep){
           const rIdx = runwayIndexByIcao.get(focusIcao);
           if(rIdx) {
             const tmp = { cid: String(p.cid), pilot: p, fp };
-            getRunwayTargetForFlight(tmp, rIdx); // populates tmp with rw... props
+            getRunwayTargetForFlight(tmp, rIdx, globalActiveRunways[icao]); // populates tmp with rw... props
             rwCtx = tmp;
           }
         }
@@ -6201,6 +6785,7 @@ else if(onGround && surfaceDep){
     cfgPrefiles.checked = !!settings.showPrefiles;
     cfgHideArrLanded.checked = !!settings.hideArrivalsLanded;
     cfgHideDepFinished.checked = !!settings.hideDeparturesFinished;
+        cfgHidePredictive.checked = !!settings.hidePredictiveRunways;
         cfgAgeBonus.checked = !!settings.xpAgeBonusEnabled;
 
     const th = normalizedThresholds(settings.xpThresholds);
@@ -6227,6 +6812,7 @@ else if(onGround && surfaceDep){
     cfgPrefiles.checked = DEFAULTS.showPrefiles;
     cfgHideArrLanded.checked = DEFAULTS.hideArrivalsLanded;
     cfgHideDepFinished.checked = DEFAULTS.hideDeparturesFinished;
+    cfgHidePredictive.checked = DEFAULTS.hidePredictiveRunways;
         cfgAgeBonus.checked = DEFAULTS.xpAgeBonusEnabled;
     cfgT1.value = DEFAULTS.xpThresholds.t1;
     cfgT2.value = DEFAULTS.xpThresholds.t2;
@@ -6296,6 +6882,7 @@ else if(onGround && surfaceDep){
     settings.showPrefiles = !!cfgPrefiles.checked;
     settings.hideArrivalsLanded = !!cfgHideArrLanded.checked;
     settings.hideDeparturesFinished = !!cfgHideDepFinished.checked;
+    settings.hidePredictiveRunways = !!cfgHidePredictive.checked;
 
     settings.xpThresholds = th;
         settings.xpAgeBonusEnabled = !!cfgAgeBonus.checked;
@@ -6307,6 +6894,9 @@ else if(onGround && surfaceDep){
     };
 
     saveSettings();
+
+    // Nach Speichern sofort Runways updaten
+    if(currentVatsimData && currentVatsimData.atis) updateAirportRunwayInfo(currentVatsimData.atis);
 
     // Apply UI updates
     applyLanguage();
@@ -6423,6 +7013,13 @@ else if(onGround && surfaceDep){
      saveSettings(); // Persist active tab immediately
      updateTabUi();
      renderBoardsFromStore();
+	 
+     // Show spinner immediately if we don't have runway data yet
+     if (!globalActiveRunways[icao]) {
+         renderLoadingRunways(icao);
+     }
+     // Trigger background update (debounce handled inside)
+     if (currentVatsimData) updateAirportRunwayInfo(currentVatsimData.atis || []);
   }
 
   function updateTabUi(){
@@ -6639,6 +7236,7 @@ else if(onGround && surfaceDep){
   async function refresh(){
     try{
       const data = await fetchFeed();
+      currentVatsimData = data;
       renderEpoch++;
 
       lastFeedTs = data?.general?.update_timestamp ? new Date(data.general.update_timestamp) : null;
@@ -6755,6 +7353,10 @@ else if(onGround && surfaceDep){
           prefetchGateIndexesForArrOrigins(arrs);
       }
 
+      // Runways / ATIS Update
+      const atisList = (data && Array.isArray(data.atis)) ? data.atis : [];
+      updateAirportRunwayInfo(atisList);
+
       prevPilotStates = nextPrev;
       pruneStatusMemory();
           pruneGateMem();
@@ -6778,6 +7380,7 @@ else if(onGround && surfaceDep){
   function startLoop(){
     if(feedTimer) clearInterval(feedTimer);
     feedTimer = setInterval(refresh, settings.feedIntervalMs);
+    setTimeout(() => updateAirportRunwayInfo([]), 500);
   }
 
   function updateUtcClock(){
