@@ -89,9 +89,17 @@
     .boardHeader { display: flex; align-items: center; justify-content: space-between; padding: 16px 20px; border-bottom: 1px solid var(--glass-border); background: rgba(255,255,255,0.02); }
     .boardHeader h2 { margin: 0; font-size: 14px; letter-spacing: 0.1em; text-transform: uppercase; font-weight: 700; color: var(--text-main); display: flex; align-items: center; gap: 8px; }
     .boardHeader h2::before { content:''; display:block; width:4px; height:16px; background:var(--primary); border-radius:2px; }
-    .runwayInfo { margin-left: 12px; font-size: 12px; font-weight: 500; color: var(--text-muted); font-family: var(--font-mono); background: rgba(0,0,0,0.2); padding: 2px 6px; border-radius: 4px; border: 1px solid rgba(255,255,255,0.05); }
-    .runwayInfo.atisMode { background: var(--primary); color: #fff; border-color: transparent; font-weight: 700; text-shadow: 0 1px 2px rgba(0,0,0,0.2); }	
         .boardHeader .mini { display: flex; gap: 8px; align-items: center; }
+		
+    
+    /* Global Runway Display in Header (Left Side) */
+    .runwayGlobal { display: flex; font-size: 11px; cursor: help; align-items: center; gap: 16px; margin-left: 20px; padding-left: 20px; border-left: 1px solid var(--glass-border); height: 32px; }
+    .runwayGroup { display: flex; align-items: center; gap: 6px; font-family: var(--font-mono); font-size: 11px; color: var(--text-muted); }
+    .runwayGroup .lbl { font-weight: 600; letter-spacing: 0.05em; text-transform: uppercase; font-size: 10px; opacity: 0.7; }
+    .runwayGroup .val { font-weight: 700; color: #fff; background: rgba(255,255,255,0.05); padding: 2px 6px; border-radius: 4px; border: 1px solid rgba(255,255,255,0.1); }
+    .runwayGlobal.pred .val { color: var(--warn); border-color: rgba(245, 158, 11, 0.3); background: rgba(245, 158, 11, 0.1); }
+    .runwayGlobal.atis .val { color: #fff; border-color: rgba(59, 130, 246, 0.4); background: rgba(59, 130, 246, 0.15); }
+
 
     .hint { font-size: 11px; color: var(--text-muted); font-weight: 500; }
 
@@ -322,11 +330,15 @@
 <header>
   <div class="wrap">
     <div class="topbar">
-      <div class="brand">
-        <h1 id="brandTitle">VATSIM FIDS</h1>
-        <div class="sub" id="brandSub">Local Board · V0.8a</div>
-      </div>
-
+      <div style="display:flex; align-items:center;">
+      <div style="display:flex; align-items:center;">
+        <div class="brand">
+          <h1 id="brandTitle">VATSIM FIDS</h1>
+          <div class="sub" id="brandSub">Local Board · V0.8a</div>
+        </div>
+        <div id="globalRunways" class="runwayGlobal"></div>
+        </div>
+ </div>
         <div class="airportTabs" id="airportTabs"></div>
       <div class="controls">
         <span class="pill clockPill" id="utcPill" title="Uhrzeit in UTC">
@@ -1193,14 +1205,6 @@ const GATE_JITTER_GRACE_MS = 20 * 1000;    // kurzzeitig minimal bewegt -> Gate 
   let currentVatsimData = null; // Speichert den letzten Feed für Config-Reloads
   // Global store for active runways per airport (for ETD calc)
   let globalActiveRunways = {};
-
-  // Style für Spinner im Header
-  const style = document.createElement('style');
-  style.innerHTML = `
-    .runwaySpinner { display:inline-block; width:10px; height:10px; border:2px solid rgba(255,255,255,0.3); border-top-color:#fff; border-radius:50%; animation:spin 1s linear infinite; margin-right:5px; vertical-align:middle; }
-    @keyframes spin { to { transform: rotate(360deg); } }
-  `;
-  document.head.appendChild(style);
 
 
   /********************
@@ -2108,39 +2112,16 @@ async function updateAirportRunwayInfo(atisList = []) {
 }
 
 function renderLoadingRunways(icao) {
-    // Zeigt Lade-Spinner im Header, nur wenn der Airport aktiv ist
     if (icao !== settings.activeTab) return;
-
-    const depH2 = document.querySelector("#depTitle");
-    const arrH2 = document.querySelector("#arrTitle");
-    
-    const spinnerHtml = `<span class="runwayInfo"><span class="runwaySpinner"></span></span>`;
-
-    const inject = (parent) => {
-        if(!parent) return;
-        const exist = parent.querySelector(".runwayInfo");
-        // Wenn schon ein Spinner da ist, nichts tun (verhindert DOM-Thrashing)
-        if(exist && exist.innerHTML.includes("runwaySpinner")) return;
-        // Wenn was anderes da ist (alte Daten), oder nichts -> austauschen
-        if(exist) exist.outerHTML = spinnerHtml;
-        else parent.insertAdjacentHTML("beforeend", spinnerHtml);
-    };
-
-    inject(depH2);
-    inject(arrH2);
+    const container = document.getElementById("globalRunways");
+    if(container) {
+        container.className = "runwayGlobal";
+        container.innerHTML = `<span style="opacity:0.7; font-size:12px; font-family:var(--font-mono);">Loading runways...</span>`;
+    }
 }
 
 function renderRunwayInfo(icao, info, atisCode) {
     // 1. ATIS Letter im Tab/Input updaten (Hack: wir suchen den Input, wenn es nur einen gibt, oder die Tabs)
-    // Da das Layout "Airport (Tabs)" nutzt, könnten wir den Titel des aktiven Tabs ändern?
-    // Einfacher: Wir setzen es hinter das Label oben links oder in die Brand-Subline temporär?
-    // Anforderung: "in den Tabs hinter dem ICAO Code dezent"
-
-    // Wir müssen das Tab-Element finden. Da `settings.airports` genutzt wird:
-    if (document.getElementById("airportInputLabel")) {
-        const lbl = document.getElementById("airportInputLabel");
-        // lbl.innerHTML = `Airport (ICAO) ${atisCode ? `<span class="badge info" style="padding:2px 6px; font-size:11px;">ATIS ${atisCode}</span>` : ""}`;
-    }
     // Update Active Tab Text
     const tabs = document.querySelectorAll(".airportTab");
     tabs.forEach(t => {
@@ -2159,50 +2140,40 @@ function renderRunwayInfo(icao, info, atisCode) {
         }
     });
 
-    // 2. Board Header Runways (NUR update wenn dies der aktive Tab ist!)
+    // 2. Global Header Runways (NUR update wenn dies der aktive Tab ist!)
     if (icao === settings.activeTab) {
+        const container = document.getElementById("globalRunways");
+        if (!container) return;	
 
         if (info && (Array.isArray(info.arrivals) || Array.isArray(info.departures))) {
             const depStr = info.departures.join(", ");
             const arrStr = info.arrivals.join(", ");
+			
+            const depLabel = (info.departures.length > 1) ? "DEP RWYS" : "DEP RWY";
+            const arrLabel = (info.arrivals.length > 1) ? "ARR RWYS" : "ARR RWY";
 
-            const depH2 = document.querySelector("#depTitle");
-            const arrH2 = document.querySelector("#arrTitle");
-
-            // Tooltip und Icon Logik
             const isPred = (info.source || "").includes("PRED");
-            const icon = isPred ? "⚠ " : "";
-            const title = isPred ? "Prognose basierend auf Wind" : "Aus ATIS geparst";
-            const modeClass = isPred ? "" : "atisMode";			
+           
+            container.className = isPred ? "runwayGlobal pred" : "runwayGlobal atis";
+            container.title = isPred ? "Prognose basierend auf Wind (Keine ATIS)" : "Aktive Runways laut ATIS";
+            
+            const icon = isPred ? `<span style="color:var(--warn); margin-right:4px;">⚠</span>` : "";
+            
+            // Stable Update: innerHTML replace is fine here because this container is NOT redrawn by board refresh loops
+            container.innerHTML = `
+                ${icon}
+                <div class="runwayGroup">
+                    <span class="lbl">${depLabel}</span>
+                    <span class="val">${depStr || "—"}</span>
+                </div>
+                <div class="runwayGroup">
+                    <span class="lbl">${arrLabel}</span>
+                    <span class="val">${arrStr || "—"}</span>
+                </div>
+            `;
+        } else {
+            container.innerHTML = "";
 
-            // Helper für stabiles DOM-Update
-            const updateHeader = (h2, label, str) => {
-                if(!h2) return;
-                // Wir bauen den kompletten HTML String für das Element
-                const newHtml = (str || isPred) 
-                    ? `<span class="runwayInfo ${modeClass}" title="${title}">${icon}${label}: ${str || "-"}</span>` 
-                    : ``;
-                
-                const exist = h2.querySelector(".runwayInfo");
-                
-                // Case 1: Wir wollen etwas anzeigen
-                if (newHtml) {
-                    if (exist) {
-                        // EXTREM WICHTIG: Nur ersetzen, wenn sich der String unterscheidet.
-                        // Das verhindert das Flackern des Browsers beim Re-Rendering.
-                        if (exist.outerHTML !== newHtml) exist.outerHTML = newHtml;
-                    } else {
-                        h2.insertAdjacentHTML('beforeend', newHtml);
-                    }
-                } 
-                // Case 2: Wir wollen nichts anzeigen (z.B. keine Runways und kein PRED)
-                else {
-                    if (exist) exist.remove();
-                }
-            };
-
-            updateHeader(depH2, "Dep", depStr);
-            updateHeader(arrH2, "Arr", arrStr);
         }
     }
 }
@@ -6421,11 +6392,19 @@ else if(onGround && surfaceDep){
     async render(list){
       // Board header count (active flights; finished/landed excluded; prefiles included iff shown)
       const activeCount = list.reduce((n, f) => n + (f?.status?.finished ? 0 : 1), 0);
-      if(this.boardType === "dep"){
-        depTitleEl.textContent = `${t("dep_title")} (${activeCount})`;
-      }else{
-        arrTitleEl.textContent = `${t("arr_title")} (${activeCount})`;
+	  
+      const titleEl = (this.boardType === "dep") ? depTitleEl : arrTitleEl;
+      const baseTitle = (this.boardType === "dep") ? t("dep_title") : t("arr_title");
+      const textVal = `${baseTitle} (${activeCount})`;
+
+      // Nur den Textknoten aktualisieren, um das .runwayInfo Element nicht zu zerstören (verhindert Flackern)
+      let textNode = Array.from(titleEl.childNodes).find(n => n.nodeType === 3); // 3 = TEXT_NODE
+      if(textNode) {
+         if(textNode.nodeValue !== textVal) textNode.nodeValue = textVal;
+      } else {
+         titleEl.prepend(document.createTextNode(textVal));
       }
+
       const first = new Map();
       for(const [id, tr] of this.rows) first.set(id, tr.getBoundingClientRect());
       const newIds = new Set(list.map(x => String(x.id)));
