@@ -110,8 +110,8 @@ foreach ($possible_paths as $path) {
     .boardHeader h2 { margin: 0; font-size: 14px; letter-spacing: 0.1em; text-transform: uppercase; font-weight: 700; color: var(--text-main); display: flex; align-items: center; gap: 8px; }
     .boardHeader h2::before { content:''; display:block; width:4px; height:16px; background:var(--primary); border-radius:2px; }
         .boardHeader .mini { display: flex; gap: 8px; align-items: center; }
-		
-    
+
+
     /* Global Runway Display in Header (Left Side) */
     .runwayGlobal { display: flex; font-size: 20px; cursor: help; align-items: center; gap: 16px; margin-left: 20px; padding-left: 20px; border-left: 1px solid var(--glass-border); height: 32px; }
     .runwayGroup { display: flex; align-items: center; gap: 6px; font-family: var(--font-mono); font-size: 11px; color: var(--text-muted); }
@@ -139,6 +139,30 @@ foreach ($possible_paths as $path) {
     }
 
     .cell-route { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; cursor: help; }
+	
+    /* Responsive Route Column: Type stays, Route shrinks */
+    .cell-route { display: flex; align-items: center; white-space: nowrap; overflow: hidden; cursor: help; }
+    /* 1. Aircraft Type: Fix, never shrink */
+    .cell-route > span:first-child { flex: 0 0 auto; margin-right: 5px; font-weight: 700; }
+    /* 2. Separator: Fix */
+    .cell-route > span:nth-child(2) { flex: 0 0 auto; }
+    /* 3. Route: Shrinkable, truncate with ellipsis */
+    .cell-route > span:last-child { flex: 0 1 auto; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
+	
+    /* RESPONSIVE LOGIC: Hide Route on small screens / heavy zoom */
+    /* Adjust 1300px based on when you feel it gets too cramped */
+    @media (max-width: 1300px) {
+        /* Hide the separator and the route text */
+        .cell-route > span:nth-child(2),
+        .cell-route > span:last-child { display: none !important; }
+        
+        /* Hide the "/ Route" part in the table header */
+        th .opt-route { display: none !important; }
+        
+        /* Ensure the column doesn't collapse completely */
+        .cell-route { min-width: 50px; } 
+    }
+
     .cell-route .muted { opacity: 0.6; font-size: 11px; }
 
     tbody tr.removing { opacity: 0; transform: scale(0.98) translateY(-10px); pointer-events: none; }
@@ -379,40 +403,43 @@ foreach ($possible_paths as $path) {
 </header>
 
 <main>
-  <div class="wrap">
-    <div class="grid">
-      <section class="board">
-        <div class="boardHeader">
-          <h2 id="depTitle">Departures</h2>
-          <div class="mini">
-            <span class="hint" id="depSortHint">Sort:</span>
-            <select id="depSort"></select>
-            <button id="depDir" title="Sortierreihenfolge umkehren">▲</button>
-          </div>
-        </div>
-        <table id="depTable">
-          <thead><tr id="depHeadRow"></tr></thead>
-          <tbody id="depBody"></tbody>
-        </table>
-      </section>
-
-      <section class="board">
-        <div class="boardHeader">
-          <h2 id="arrTitle">Arrivals</h2>
-          <div class="mini">
-            <span class="hint" id="arrSortHint">Sort:</span>
-            <select id="arrSort"></select>
-            <button id="arrDir" title="Sortierreihenfolge umkehren">▲</button>
-          </div>
-        </div>
-        <table id="arrTable">
-          <thead><tr id="arrHeadRow"></tr></thead>
-          <tbody id="arrBody"></tbody>
-        </table>
-      </section>
-    </div>
+    <div id="boardsContainer"></div>
   </div>
 </main>
+
+<template id="airportViewTemplate">
+  <div class="grid airport-view" style="display:none;">
+    <section class="board">
+      <div class="boardHeader">
+        <h2 class="js-depTitle">Departures</h2>
+        <div class="mini">
+          <span class="hint js-sortHint">Sort:</span>
+          <select class="js-depSort"></select>
+          <button class="js-depDir" title="Reverse sort">▲</button>
+        </div>
+      </div>
+      <table class="js-depTable">
+        <thead><tr class="js-depHeadRow"></tr></thead>
+        <tbody class="js-depBody"></tbody>
+      </table>
+    </section>
+
+    <section class="board">
+      <div class="boardHeader">
+        <h2 class="js-arrTitle">Arrivals</h2>
+        <div class="mini">
+          <span class="hint js-sortHint">Sort:</span>
+          <select class="js-arrSort"></select>
+          <button class="js-arrDir" title="Reverse sort">▲</button>
+        </div>
+      </div>
+      <table class="js-arrTable">
+        <thead><tr class="js-arrHeadRow"></tr></thead>
+        <tbody class="js-arrBody"></tbody>
+      </table>
+    </section>
+  </div>
+</template>
 
 <div id="tooltip" class="tooltip" aria-hidden="true"></div>
 
@@ -513,6 +540,8 @@ foreach ($possible_paths as $path) {
               <label style="display:flex; gap:8px; cursor:pointer;"><input id="cfgHideArrLanded" type="checkbox" /> <span id="cfgHideArrText">Arr: Gelandete ausblenden</span></label>
               <label style="display:flex; gap:8px; cursor:pointer;"><input id="cfgHideDepFinished" type="checkbox" /> <span id="cfgHideDepText">Dep. Gelandete ausblenden</span></label>
               <label style="display:flex; gap:8px; cursor:pointer;"><input id="cfgHidePredictive" type="checkbox" /> <span id="cfgHidePredictiveText">Prädiktive Runways ausblenden</span></label>
+              <label style="display:flex; gap:8px; cursor:pointer;"><input id="cfgHideLocal" type="checkbox" /> <span id="cfgHideLocalText">Lokalflüge ausblenden</span></label>
+              <label style="display:flex; gap:8px; cursor:pointer;"><input id="cfgHideVfr" type="checkbox" /> <span id="cfgHideVfrText">VFR ausblenden</span></label>
                         </div>
           </div>
  <div class="colHelp" id="cfgDisplayHelp">Spalten ein-/ausblenden und Reihenfolge anpassen (wirkt nach „Speichern“).</div>
@@ -605,7 +634,7 @@ foreach ($possible_paths as $path) {
     enabled: true, // HIER AKTIVIEREN/DEAKTIVIEREN
     apiUrl: "vFIDS_api.php"
   };
-  const REX_RULES_URL = "rex_rwys.json";  
+  const REX_RULES_URL = "rex_rwys.json";
   const VATSIM_DATA_URL = "https://data.vatsim.net/v3/vatsim-data.json";
   const CORE_API_BASE = "https://api.vatsim.net/v2";
   const CORS_PROXY = "https://vfids.marcelsemelka.workers.dev/?url=";
@@ -642,7 +671,7 @@ foreach ($possible_paths as $path) {
       th_to: "Nach",
       th_from: "Von",
       th_callsign: "Callsign",
-      th_type_route: "Typ / Route",
+      th_type_route: 'Typ <span class="opt-route muted">/ Route</span>',
       th_alt_gs: "Alt/GS",
       th_status: "Status",
       th_xp: "XP",
@@ -666,6 +695,8 @@ foreach ($possible_paths as $path) {
       cfg_xp_hydrate: "Max XP Hydrate / Cycle",
       cfg_filter: "Filter & Darstellung",
       cfg_prefiles: "Prefiles anzeigen",
+      cfg_hide_local: "Lokalflüge ausblenden",
+      cfg_hide_vfr: "VFR Verkehr ausblenden",
       cfg_hide_arr: "Ankünfte: Gelandete ausblenden",
       cfg_hide_dep: "Abflüge: Gelandete ausblenden",
       cfg_hide_pred: "Prädiktive Runways ausblenden",
@@ -760,7 +791,7 @@ foreach ($possible_paths as $path) {
       status_gate_named_at: "AM GATE {gate} @{icao}",
           status_gate_plain_at: "AM GATE @{icao}",
           status_takeoff: "TAKEOFF",
-		  status_takeoff_rwy: "TAKEOFF RWY {rwy}",		  
+                  status_takeoff_rwy: "TAKEOFF RWY {rwy}",
           status_lineup: "LINEUP",
           status_lineup_rwy: "LINEUP RWY {rwy}",
           status_local: "LOCAL",
@@ -789,7 +820,7 @@ foreach ($possible_paths as $path) {
       th_to: "To",
       th_from: "From",
       th_callsign: "Callsign",
-      th_type_route: "Type / Route",
+      th_type_route: 'Type <span class="opt-route muted">/ Route</span>',
       th_alt_gs: "Alt/GS",
       th_status: "Status",
       th_xp: "XP",
@@ -816,6 +847,8 @@ foreach ($possible_paths as $path) {
       cfg_hide_arr: "Arrivals: Hide landed",
       cfg_hide_dep: "Departures: Hide landed",
       cfg_hide_pred: "Hide predictive runways",
+      cfg_hide_local: "Hide local flights",
+      cfg_hide_vfr: "Hide VFR traffic",
       cfg_display_title: "Display",
       cfg_display_help: "Toggle columns and adjust order (applies after “Save”).",
       cfg_display_dep: "Departures Board",
@@ -907,7 +940,7 @@ foreach ($possible_paths as $path) {
       status_gate_named_at: "AT GATE {gate} @{icao}",
           status_gate_plain_at: "AT GATE @{icao}",
           status_takeoff: "TAKEOFF",
-		  status_takeoff_rwy: "TAKEOFF RWY {rwy}",		  
+                  status_takeoff_rwy: "TAKEOFF RWY {rwy}",
           status_lineup: "LINEUP",
           status_lineup_rwy: "LINEUP RWY {rwy}",
           status_local: "LOCAL",
@@ -1101,6 +1134,8 @@ const GATE_JITTER_GRACE_MS = 20 * 1000;    // kurzzeitig minimal bewegt -> Gate 
     hideArrivalsLanded: false,
     hideDeparturesFinished: false,
     hidePredictiveRunways: false,
+    hideLocalFlights: false,
+    hideVfrFlights: false,
     depSort: { by:"status", dir: 1 },
     arrSort: { by:"status", dir: 1 },
     memberTtlStatsMs: 5 * 24 * 3600 * 1000,
@@ -1225,7 +1260,7 @@ const GATE_JITTER_GRACE_MS = 20 * 1000;    // kurzzeitig minimal bewegt -> Gate 
 
   let settings = loadSettings();
   let memberCache = {}; // Initial leer, wird in boot() geladen
-  let rexRules = {}; // Regelwerk für Runway-Prediction  
+  let rexRules = {}; // Regelwerk für Runway-Prediction
   let currentVatsimData = null; // Speichert den letzten Feed für Config-Reloads
   // Global store for active runways per airport (for ETD calc)
   let globalActiveRunways = {};
@@ -1254,20 +1289,8 @@ const GATE_JITTER_GRACE_MS = 20 * 1000;    // kurzzeitig minimal bewegt -> Gate 
   const apiText = document.getElementById("apiText");
   const apiExtra = document.getElementById("apiExtra");
 
-  const depTitleEl = document.getElementById("depTitle");
-  const arrTitleEl = document.getElementById("arrTitle");
-  const depSortHintEl = document.getElementById("depSortHint");
-  const arrSortHintEl = document.getElementById("arrSortHint");
-
-  const depHeadRow = document.getElementById("depHeadRow");
-  const arrHeadRow = document.getElementById("arrHeadRow");
-
-  const depBody = document.getElementById("depBody");
-  const arrBody = document.getElementById("arrBody");
-  const depSortEl = document.getElementById("depSort");
-  const depDirBtn = document.getElementById("depDir");
-  const arrSortEl = document.getElementById("arrSort");
-  const arrDirBtn = document.getElementById("arrDir");
+  const boardsContainer = document.getElementById("boardsContainer");
+  const viewTemplate = document.getElementById("airportViewTemplate");
 
   const tooltip = document.getElementById("tooltip");
   const legendContent = document.getElementById("legendContent");
@@ -1301,6 +1324,8 @@ const GATE_JITTER_GRACE_MS = 20 * 1000;    // kurzzeitig minimal bewegt -> Gate 
   const cfgHideArrLanded = document.getElementById("cfgHideArrLanded");
   const cfgHideDepFinished = document.getElementById("cfgHideDepFinished");
   const cfgHidePredictive = document.getElementById("cfgHidePredictive");
+  const cfgHideLocal = document.getElementById("cfgHideLocal");
+  const cfgHideVfr = document.getElementById("cfgHideVfr");
   const cfgT1 = document.getElementById("cfgT1");
   const cfgT2 = document.getElementById("cfgT2");
   const cfgT3 = document.getElementById("cfgT3");
@@ -1331,6 +1356,8 @@ const GATE_JITTER_GRACE_MS = 20 * 1000;    // kurzzeitig minimal bewegt -> Gate 
   const cfgHideArrText = document.getElementById("cfgHideArrText");
   const cfgHideDepText = document.getElementById("cfgHideDepText");
   const cfgHidePredictiveText = document.getElementById("cfgHidePredictiveText");
+  const cfgHideLocalText = document.getElementById("cfgHideLocalText");
+  const cfgHideVfrText = document.getElementById("cfgHideVfrText");
   const cfgDisplayTitle = document.getElementById("cfgDisplayTitle");
   const cfgDisplayHelp = document.getElementById("cfgDisplayHelp");
   const cfgDisplayDepTitle = document.getElementById("cfgDisplayDepTitle");
@@ -1488,39 +1515,29 @@ const GATE_JITTER_GRACE_MS = 20 * 1000;    // kurzzeitig minimal bewegt -> Gate 
   /********************
    * Sort options build (i18n)
    ********************/
-  function rebuildSortOptions(){
+  function rebuildSortOptions(container){
     const depVal = depSortEl.value || settings.depSort.by;
     const arrVal = arrSortEl.value || settings.arrSort.by;
 
-    depSortEl.innerHTML = "";
-    [
-      ["status", t("sort_status")],
-      ["time", t("sort_time_std")],
-      ["callsign", t("sort_callsign")],
-      ["dest", t("sort_dest")],
-      ["xp", t("sort_xp")]
-    ].forEach(([v,txt]) => {
-      const o = document.createElement("option");
-      o.value = v; o.textContent = txt;
-      depSortEl.appendChild(o);
-    });
-
-    arrSortEl.innerHTML = "";
-    [
-      ["status", t("sort_status")],
-      ["time", t("sort_time_eta")],
-      ["callsign", t("sort_callsign")],
-      ["orig", t("sort_orig")],
-      ["xp", t("sort_xp")]
-    ].forEach(([v,txt]) => {
-      const o = document.createElement("option");
-      o.value = v; o.textContent = txt;
-      arrSortEl.appendChild(o);
-    });
-
-    depSortEl.value = depVal || "status";
-    arrSortEl.value = arrVal || "status";
+    // This is now handled per-board in setupAirportView,
+    // but we keep a helper to generate options HTML string
+    // for dynamic insertion.
   }
+
+  function createSortOptionsHtml(currentVal, boardType){
+     const opts = [
+       ["status", t("sort_status")],
+       ["time", boardType==='dep' ? t("sort_time_std") : t("sort_time_eta")],
+       ["callsign", t("sort_callsign")],
+       ["dest", boardType==='dep' ? t("sort_dest") : t("sort_orig")],
+       ["xp", t("sort_xp")]
+     ];
+     return opts.map(([v,txt]) => `<option value="${v}" ${v===currentVal?'selected':''}>${escapeHtml(txt)}</option>`).join("");
+  }
+
+  /* +     Legacy global elements removed/replaced by dynamic scoping.
+     The sort rebuilding logic is moved to setupAirportView.
+  */
 
   /********************
    * Board Columns (header + rendering)
@@ -1546,10 +1563,6 @@ const GATE_JITTER_GRACE_MS = 20 * 1000;    // kurzzeitig minimal bewegt -> Gate 
     return key;
   }
 
-  function buildBoardHeaders(){
-    buildHeaderFor("dep", depHeadRow);
-    buildHeaderFor("arr", arrHeadRow);
-  }
 
   function buildHeaderFor(boardType, rowEl){
     rowEl.innerHTML = "";
@@ -1558,8 +1571,7 @@ const GATE_JITTER_GRACE_MS = 20 * 1000;    // kurzzeitig minimal bewegt -> Gate 
       if(!layout.visible[key]) continue;
       const th = document.createElement("th");
       const meta = COL_META[key] || {};
-      th.textContent = colHeaderLabel(key, boardType);
-      if(meta.width) th.style.width = meta.width;
+      th.innerHTML = colHeaderLabel(key, boardType); // CHANGE: innerHTML allows <span> tags      if(meta.width) th.style.width = meta.width;
       if(meta.thClass) th.className = meta.thClass;
       rowEl.appendChild(th);
     }
@@ -1573,13 +1585,6 @@ const GATE_JITTER_GRACE_MS = 20 * 1000;    // kurzzeitig minimal bewegt -> Gate 
     brandSubEl.textContent = t("brand_sub");
     refreshBtn.title = t("refresh_title");
     configBtn.title = t("cfg_title");
-
-    depTitleEl.textContent = `${t("dep_title")} (0)`;
-    arrTitleEl.textContent = `${t("arr_title")} (0)`;
-    depSortHintEl.textContent = t("sort_hint");
-    arrSortHintEl.textContent = t("sort_hint");
-    depDirBtn.title = t("dep_dir_title");
-    arrDirBtn.title = t("arr_dir_title");
 
     utcPill.title = t("utc_title");
     feedPill.title = t("feed_title");
@@ -1601,6 +1606,8 @@ const GATE_JITTER_GRACE_MS = 20 * 1000;    // kurzzeitig minimal bewegt -> Gate 
     cfgHideArrText.textContent = t("cfg_hide_arr");
     cfgHideDepText.textContent = t("cfg_hide_dep");
     cfgHidePredictiveText.textContent = t("cfg_hide_pred");
+    cfgHideLocalText.textContent = t("cfg_hide_local");
+    cfgHideVfrText.textContent = t("cfg_hide_vfr");
     cfgDisplayTitle.textContent = t("cfg_display_title");
     cfgDisplayHelp.textContent = t("cfg_display_help");
     cfgDisplayDepTitle.textContent = t("cfg_display_dep");
@@ -1631,19 +1638,25 @@ const GATE_JITTER_GRACE_MS = 20 * 1000;    // kurzzeitig minimal bewegt -> Gate 
     pilotCardHistory.textContent = t("pilot_card_history");
     historyNote.textContent = t("history_note");
 
-    rebuildSortOptions();
-    buildBoardHeaders();
     rebuildLegend();
-    scheduleAirportXpIndexUpdate();
 
-    // Recompute XP labels/tooltips for already loaded flights
-    for(const f of [...lastDeps, ...lastArrs]){
-      if(f.details || f.stats){
-        f.exp = computeExperience(f.details ?? null, f.stats ?? null);
-        depBoard.updateXpById(f.id);
-        arrBoard.updateXpById(f.id);
-      }
+    for(const [icao, boardSet] of airportBoards){
+        // Update headers/labels in DOM
+        buildHeaderFor("dep", boardSet.ui.depHeadRow);
+        buildHeaderFor("arr", boardSet.ui.arrHeadRow);
+        boardSet.ui.depSortHint.textContent = t("sort_hint");
+        boardSet.ui.arrSortHint.textContent = t("sort_hint");
+        boardSet.ui.depSort.innerHTML = createSortOptionsHtml(settings.depSort.by, "dep");
+        boardSet.ui.arrSort.innerHTML = createSortOptionsHtml(settings.arrSort.by, "arr");
+        boardSet.ui.depDir.title = t("dep_dir_title");
+        boardSet.ui.arrDir.title = t("arr_dir_title");
+
+        // Trigger re-render to update column headers and XP tooltips
+        boardSet.depBoard.render(boardSet.lastDeps || []);
+        boardSet.arrBoard.render(boardSet.lastArrs || []);
     }
+
+    scheduleAirportXpIndexUpdate();
   }
 
   /********************
@@ -1808,11 +1821,11 @@ function parseActiveRunways(station) {
 
     // Alles in Großbuchstaben und doppelte Leerzeichen entfernen
     let cleanText = rawText.toUpperCase().replace(/\s+/g, ' ').trim();
-	
+
     // KDFW/US-Format Fix: "RWYS, 36L" -> "RWYS 36L" (Komma entfernen, wenn es direkt auf Keyword folgt)
     cleanText = cleanText.replace(/(RWYS|RUNWAYS|RWY|RUNWAY),\s+/g, "$1 ");
     // Generelle Bereinigung von Satzzeichen, die das Parsing stören könnten (außer Slash für R/L Trennung wenn nötig, hier aber meist Spaces)
-    cleanText = cleanText.replace(/[\.]/g, " ");	
+    cleanText = cleanText.replace(/[\.]/g, " ");
 
     // 2. Pre-Processing / Sanitizing
     // A. Closed Runways
@@ -2025,13 +2038,13 @@ function predictRunways(icao, metar, history) {
 
     const wDirVal = (metar.wind && metar.wind.dir != null) ? metar.wind.dir : metar.wdir;
     const wSpdVal = (metar.wind && metar.wind.spd != null) ? metar.wind.spd : metar.wspd;
-	
+
     if (wDirVal == null) return null;
 
 
     const windDir = wDirVal === "VRB" ? 0 : Number(wDirVal);
     const windSpd = Number(wSpdVal || 0);
-	
+
     const arrCandidates = [];
     const depCandidates = [];
 
@@ -2051,7 +2064,7 @@ function predictRunways(icao, metar, history) {
         if (arrCheck.allowed) {
             // Score = Headwind + Priority-Bonus (Prio 1 = +100kt Score, Prio 2 = +50kt)
             // Damit sticht eine Prio-Bahn auch bei leichtem Tailwind eine Non-Prio-Bahn mit Headwind aus.
-            const prioBonus = (10 - (arrCheck.priority || 5)) * 15; 
+            const prioBonus = (10 - (arrCheck.priority || 5)) * 15;
             arrCandidates.push({ des, score: hw + prioBonus });
         }
         if (depCheck.allowed) {
@@ -2077,7 +2090,7 @@ function predictRunways(icao, metar, history) {
             let diff = Math.abs(primHdg - h);
             if (diff > 180) diff = 360 - diff;
             // Erlaube parallele (0°) und kreuzende (<90°) Bahnen, aber keine Gegenbahnen (>90°)
-            return diff < 85; 
+            return diff < 85;
         }).slice(0, 3).map(c => c.des);
     };
 
@@ -2125,14 +2138,14 @@ async function updateAirportRunwayInfo(atisList = []) {
 
         // ALLE ATIS Stationen suchen (A_ATIS, D_ATIS, oder normale ATIS)
         const stations = atisList.filter(a => a.callsign.startsWith(icao + "_") && a.callsign.endsWith("_ATIS"));
-        const atisOnline = stations.length > 0;		
+        const atisOnline = stations.length > 0;
 
         let rwyInfo = null;
         let atisCode = null;
         let needsUpdate = true;
- 
+
         // Check Age: Wenn Daten frisch (< 20 Min) und ATIS vorhanden (oder PRED valid), überspringen wir Fetch
-        // ABER: Wenn ATIS online ist, wollen wir sofort updaten (falls sich Buchstaben/Runways geändert haben).		
+        // ABER: Wenn ATIS online ist, wollen wir sofort updaten (falls sich Buchstaben/Runways geändert haben).
         if (cachedRwy) {
             const age = now - (cachedRwy.ts || 0);
             // Wenn ATIS da ist -> Immer parsen (Parsing ist billig, Daten sind im Feed).
@@ -2142,13 +2155,13 @@ async function updateAirportRunwayInfo(atisList = []) {
             }
         }
 
-        if (!needsUpdate) continue;		
+        if (!needsUpdate) continue;
 
         // METAR Update nötig?
         // Nur fetchen, wenn wir wirklich müssen (kein Cache oder alt) UND wir keine ATIS haben (für Prediction Fallback)
         // ODER wenn wir ATIS haben aber trotzdem Winddaten für History wollen (optional, hier sparen wir API Calls).
         let mData = metarCache[icao];
-        
+
         // Wir holen METAR, wenn Cache alt ist. Das ist unabhängig von ATIS, da wir Winddaten für Predictions anderer Features brauchen könnten.
         // Da METAR fetch async ist, blockiert es hier nicht.
         if (!mData || (now - mData.ts) > 20 * 60 * 1000) {
@@ -2286,24 +2299,24 @@ function renderRunwayInfo(icao, info, atisCode) {
     // 2. Global Header Runways (NUR update wenn dies der aktive Tab ist!)
     if (icao === settings.activeTab) {
         const container = document.getElementById("globalRunways");
-        if (!container) return;	
+        if (!container) return;
 
         if (info && (Array.isArray(info.arrivals) || Array.isArray(info.departures))) {
             const depStr = info.departures.join(", ");
             const arrStr = info.arrivals.join(", ");
-			
+
             const depLabel = (info.departures.length > 1) ? "DEP RWYS" : "DEP RWY";
             const arrLabel = (info.arrivals.length > 1) ? "ARR RWYS" : "ARR RWY";
 
             const isPred = (info.source || "").includes("PRED");
-           
+
             container.className = isPred ? "runwayGlobal pred" : "runwayGlobal atis";
             container.title = isPred ? "Prognose basierend auf Wind (Keine ATIS)" : "Aktive Runways laut ATIS";
-            
-            const icon = isPred 
-                ? `<span style="color:var(--warn); margin-right:4px;">⚠</span>` 
+
+            const icon = isPred
+                ? `<span style="color:var(--warn); margin-right:4px;">⚠</span>`
                 : `<span style="color:var(--info); margin-right:4px; font-size:1.1em;">🛈</span>`;
-            
+
             // Stable Update: innerHTML replace is fine here because this container is NOT redrawn by board refresh loops
             container.innerHTML = `
                 ${icon}
@@ -3076,14 +3089,14 @@ out geom;
     if(maxM != null && best > maxM) return null;
     return best;
   }
-  
+
   async function loadRexRules(){
     try {
         const res = await fetch(REX_RULES_URL);
         if(res.ok) rexRules = await res.json();
         console.log("REX Rules loaded:", Object.keys(rexRules).length, "airports");
     } catch(e) { console.warn("REX Rules load failed", e); }
-  }  
+  }
 
   function pruneTaxiMem(){
     const now = Date.now();
@@ -3627,7 +3640,7 @@ out geom;
         const oStart = orphan.geometry[0];
         const oEnd   = orphan.geometry[orphan.geometry.length-1];
         const oBrg   = bearingDeg(oStart.lat, oStart.lon, oEnd.lat, oEnd.lon);
-        
+
         let merged = false;
         for(const main of named) {
             const mStart = main.geometry[0];
@@ -3641,7 +3654,7 @@ out geom;
             // Check Proximity: Orphan End <-> Main Start
             if(haversineMeters(oEnd.lat, oEnd.lon, mStart.lat, mStart.lon) < 30) {
                 // Prepend orphan points to main
-                main.geometry = [...orphan.geometry, ...main.geometry]; 
+                main.geometry = [...orphan.geometry, ...main.geometry];
                 merged = true;
             }
             // Check Proximity: Orphan Start <-> Main End
@@ -3650,9 +3663,9 @@ out geom;
                 main.geometry = [...main.geometry, ...orphan.geometry];
                 merged = true;
             }
-            // Also check inverted matching (if orphan is drawn reverse) -> simplified: 
+            // Also check inverted matching (if orphan is drawn reverse) -> simplified:
             // Since usually segments are drawn roughly consistent or short, the endpoint check covers most.
-            
+
             if(merged) break; // Consumed this orphan
         }
     }
@@ -3661,7 +3674,7 @@ out geom;
 
   function buildRunwayEndpointsFromElements(elements){
     const endpoints = [];
-    
+
     // 1. Stitch fragments before processing
     const consolidated = stitchRunwayGeometry(elements || []);
 
@@ -3882,12 +3895,116 @@ out geom tags;
     const vv = vx*vx + vy*vy;
     if(vv < 1e-6) return null;
     let t = (P.x*vx + P.y*vy) / vv;
-    t = Math.max(0, Math.min(1, t));
+    // FIX: Do NOT clamp t to 0..1 here. We need the projection onto the infinite line
+    // (extended centerline) for correct approach detection.
+    // t < 0 = Approach/Before Threshold, t > 1 = Past Stop End.
     const Qx = vx * t, Qy = vy * t;
     const lateralM = Math.hypot(P.x - Qx, P.y - Qy);
     const lenM = Math.hypot(vx, vy);
     const alongM = lenM * t;
     return { alongM, lateralM, t, lenM };
+  }
+
+  // NEW: Detect approach runway for arriving flights (Cone/Corridor logic)
+  function resolveArrivalRunwayForFlight(p, runwayIndex, activeRunways, distNm, elevation=0){
+    if(!p || !runwayIndex || !runwayIndex.endpoints) return null;
+    const lat = Number(p.latitude);
+    const lon = Number(p.longitude);
+    const trk = Number(p.heading || 0);
+    const alt = Number(p.altitude || 0);
+    if(!isFinite(lat) || !isFinite(lon)) return null;
+
+    // Only relevant for airborne arrivals near the airport
+    const dNm = distNm;
+    if(!isFinite(dNm) || dNm > 25) return null; // 25NM lookup radius
+
+    // Performance Optimization: Skip logic if aircraft is > 5000ft AGL (Above Ground Level)
+    // This avoids false positives for overflights or high approach transitions.
+    if((alt - elevation) > 5000) return null;
+
+
+    // DEBUG: Enable via console: window.RWY_DEBUG = true
+    const debug = (window.RWY_DEBUG === true || (window.RWY_DEBUG_CALLSIGN && p.callsign === window.RWY_DEBUG_CALLSIGN));
+
+    // Prepare Candidate List for Tiered Selection
+    const candidates = [];
+
+    const activeSet = new Set(activeRunways?.arrivals || []);
+
+    // Check if the active runways come from Prediction (lower priority than ATIS)
+    const isPrediction = (activeRunways?.source || "").includes("PRED");
+
+    for(const ep of runwayIndex.endpoints){
+        // Find opposite end (Stop End) to determine runway geometry
+        const other = runwayIndex.endpoints.find(e => e.wayId === ep.wayId && e.epId !== ep.epId);
+        if(!other) continue;
+
+        // 1. Heading Check: Bearing FROM Threshold (Ep) TO Stop End (Other)
+        // This represents the true landing heading.
+        const rwyHdg = bearingDeg(ep.lat, ep.lon, other.lat, other.lon);
+        const align = angleDiffDeg(trk, rwyHdg);
+        // Allow up to 60deg intercept at distance, tightening to 30deg close in (<5NM)
+        const maxAlign = dNm < 5 ? 10 : 15;
+        if(align > maxAlign) {
+            if(debug) console.log(`[RWY-DBG] ${p.callsign} skip ${ep.designator}: align ${Math.round(align)} > ${maxAlign}`);
+            continue;
+        }
+
+        // 2. Projection Check (Project P onto line A->B where A=Threshold, B=StopEnd)
+        // t=0 is Threshold, t=1 is StopEnd.
+        // Aircraft on final approach will have t < 0. Aircraft rolling out t > 0.
+        const proj = projectToRunwayAxisMeters(lat, lon, ep.lat, ep.lon, other.lat, other.lon);
+        if(!proj) continue;
+
+        // Filter: Reject if clearly "past" the runway (missed approach/overflown)
+        // t=0 is Threshold, t=1 is Stop End. We accept anything < 0.9 (approaching or rolling out).
+        if(proj.t > 0.9) {
+             if(debug) console.log(`[RWY-DBG] ${p.callsign} skip ${ep.designator}: past rwy t=${proj.t.toFixed(2)}`);
+             continue;
+        }
+
+        // VATSIM Tollerance: Much wider cone to catch visual approaches and sloppy intercepts.
+        // Base: 900m (allows ~0.5NM deviation at threshold).
+        // Spread: 20% of distance (allows wide funnel).
+        const distToThrM = haversineMeters(lat, lon, ep.lat, ep.lon);
+        const allowedLatM = 900 + (distToThrM * 0.20);
+
+        if(proj.lateralM > allowedLatM) {
+             if(debug) console.log(`[RWY-DBG] ${p.callsign} skip ${ep.designator}: lat ${Math.round(proj.lateralM)} > ${Math.round(allowedLatM)} (DistThr: ${Math.round(distToThrM)})`);
+             continue;
+        }
+
+        // 3. Scoring
+        // Lower score is better.
+        let score = proj.lateralM + (align * 20);
+
+        // Determine Priority Tier:
+        // Tier 1: Active Runway (Confirmed via ATIS)
+        // Tier 2: Active Runway (Predicted)
+        // Tier 3: Inactive Runway (Fallback)
+        let tier = 3;
+        if(activeSet.has(ep.designator)){
+            tier = isPrediction ? 2 : 1;
+        }
+
+        candidates.push({ ep, score, tier, debugInfo: `Tier ${tier} Score ${Math.round(score)}` });
+    }
+
+        //if(debug) console.log(`[RWY-DBG] ${p.callsign} cand ${ep.designator} score=${Math.round(score)}`);
+
+        +    // Sort: First by Tier (ascending), then by Score (ascending)
+    candidates.sort((a,b) => {
+        if(a.tier !== b.tier) return a.tier - b.tier; // Priority to lower tier
+        return a.score - b.score; // Break ties with geometry score
+    });
+
+    if(candidates.length > 0){
+        const best = candidates[0];
+        if(debug) console.log(`[RWY-DBG] ${p.callsign} WINNER -> ${best.ep.designator} (${best.debugInfo})`);
+        return best.ep;
+     }
+
+return null;
   }
 
   function intersectionHintFromRemarks(focusIcao, remarks){
@@ -3945,7 +4062,7 @@ out geom tags;
       const mNow = runwayEndpointMetric(lat, lon, ep, runwayIdx);
       const dNow = mNow.dNow;
       const metricNow = mNow.metric;
-	  
+
       // Active Runway Weighting
       // If ATIS/Prediction says this is active, boost it significantly.
       let weightBonus = 0;
@@ -3954,8 +4071,8 @@ out geom tags;
           // Massive bonus for ATIS confirmed (8km), large for Pred (4km)
           weightBonus = isPred ? 4000 : 8000;
       }
-      const weightedMetric = metricNow - weightBonus;	  
-	  
+      const weightedMetric = metricNow - weightBonus;
+
       if(!isFinite(dNow) || dNow > RUNWAY_TARGET_MAX_CONSIDER_M) continue;
       if(!isFinite(metricNow)) continue;
 
@@ -4292,9 +4409,19 @@ out geom tags;
     }
   }
 
-  function updateArrActualTimesForPilot(p, { isLandedAtFocus=false, isInBlockAtFocus=false } = {}){
+  function updateArrActualTimesForPilot(p, { isLandedAtFocus=false, isInBlockAtFocus=false, reset=false } = {}){
     const cid = String(p?.cid ?? "");
     if(!cid) return;
+
+    // RESET Logic for Go-Arounds
+    if(reset){
+        if(arrActualTimeMem.has(cid)) arrActualTimeMem.delete(cid);
+        // Also clean the temporary props on the pilot object to ensure immediate UI update
+        if(p.__aldtTs) p.__aldtTs = null;
+        if(p.__aibtTs) p.__aibtTs = null;
+        return;
+    }
+
     const now = Date.now();
 
     let e = arrActualTimeMem.get(cid);
@@ -5388,7 +5515,6 @@ out geom tags;
 
   function rebuildLegend(){
     const {t1,t2,t3,t4} = normalizedThresholds(settings.xpThresholds);
-    const noteKey = xpUsesAgeBonus() ? "legend_note_age_on" : "legend_note_age_off";
     legendContent.innerHTML = `
       <span class="legendTitle">${escapeHtml(t("legend_title"))}</span>
       <span class="xpPill bad" style="cursor:default"><span class="xDot"></span><span class="lvl">${escapeHtml(levelShort("new"))}</span><span class="score">0–${t1-1}</span></span>
@@ -5397,7 +5523,6 @@ out geom tags;
       <span class="xpPill good" style="cursor:default"><span class="xDot"></span><span class="lvl">${escapeHtml(levelShort("experienced"))}</span><span class="score">${t3}–${t4-1}</span></span>
       <span class="xpPill good" style="cursor:default"><span class="xDot"></span><span class="lvl">${escapeHtml(levelShort("veteran"))}</span><span class="score">${t4}–100</span></span>
       <span class="xpPill missing" style="cursor:default"><span class="xDot"></span><span class="lvl">${escapeHtml(t("xp_na"))}</span></span>
-      <span class="legendNote">${escapeHtml(t(noteKey))}</span>
     `;
   }
 
@@ -5494,14 +5619,14 @@ out geom tags;
       if(!p || !fp) return null;
       const lat = Number(p.latitude), lon = Number(p.longitude);
       if(!isFinite(lat) || !isFinite(lon)) return null;
-	  
+
       // Determine max allowed speed for lineup detection.
       // Standard: 24kts. If we just merged onto axis (rolling lineup), allow up to 38kts
       // to catch the turn before the takeoff acceleration spikes GS.
       // Note: We check specific conditions below before applying the loose limit.
       const gs = Number(p.groundspeed || 0);
-      const limitGs = LINEUP_GS_MAX_KTS + 14; 
-      if(!isFinite(gs) || gs > limitGs) return null;	  
+      const limitGs = LINEUP_GS_MAX_KTS + 14;
+      if(!isFinite(gs) || gs > limitGs) return null;
 
     // 1. HOT ZONE LOGIC (Pre-Calculated Lineup Segments)
     // This handles long taxiways and complex intersections correctly.
@@ -5559,9 +5684,9 @@ out geom tags;
       };
       const tgt = getRunwayTargetForFlight(f, rIdx, globalActiveRunways[icao]);
       if(!tgt) return null;
-	  
+
       // Check Standard Speed Limit unless we have strong "Just Merged" signal
-      if (!tgt.rwJustMergedOntoAxis && gs > LINEUP_GS_MAX_KTS) return null;	  
+      if (!tgt.rwJustMergedOntoAxis && gs > LINEUP_GS_MAX_KTS) return null;
 
       // Must be tightly on runway axis.
       // NOTE: Do NOT rely on f.rwOnAxisTight here (it intentionally excludes runway ends via proj.t > 0.03),
@@ -5703,13 +5828,13 @@ out geom tags;
     else if(arrAp && dArr != null && dArr < 15) groundRef = arrAp.elevation;
 
     const isGroundAlt = groundRef > 0 ? (alt < (groundRef + 350)) : (alt < 1500);
-	
+
     // Pre-calc runway context if detecting departure (needed for Takeoff Rwy detection)
     let rwCtx = null;
     if(boardType === 'dep' && focusIcao && dep === focusIcao && runwayIndexByIcao.has(focusIcao)){
         rwCtx = getRunwayTargetForFlight({ cid: String(p.cid), pilot: p, fp }, runwayIndexByIcao.get(focusIcao), globalActiveRunways[focusIcao]);
-    }	
-	
+    }
+
     // Robust on-ground detection:
     let onGround = (gs < 45 && isGroundAlt);
     if(isGroundAlt){
@@ -5758,6 +5883,30 @@ out geom tags;
 
     const approachOk = airborne && inApproachZone && gs >= 80 && (descending || alt <= 16000 || (dArr != null && dArr < 35 && alt <= 21000));
     const goAroundOk = airborne && inApproachZone && climbing && alt <= 11000 && gs >= 90;
+
+    // FIX: If a Go-Around is detected, we MUST reset any "Landed" state immediately to show ETA again.
+    if(goAroundOk && boardType === "arr"){
+        updateArrActualTimesForPilot(p, { reset: true });
+    }
+
+    // NEW: Attempt to resolve specific arrival runway for Status Text & Precise ETA
+    if(boardType === "arr" && airborne && inApproachZone && focusIcao && arr === focusIcao){
+        const rIdx = runwayIndexByIcao.get(focusIcao);
+        if(!rIdx) ensureRunwayIndexForIcao(focusIcao).catch(()=>{});
+        else {
+            const active = globalActiveRunways[focusIcao] || null;
+            // Call with dArr (distance in NM) and Destination Elevation (for AGL check)
+            const elev = arrAp ? (arrAp.elevation || 0) : 0;
+            const rwyEp = resolveArrivalRunwayForFlight(p, rIdx, active, dArr, elev);
+            if(rwyEp){
+                p.arrRwyEp = rwyEp;
+                p.arrRwyDes = rwyEp.designator;
+            } else {
+                p.arrRwyEp = null;
+                p.arrRwyDes = null;
+            }
+        }
+    }
 
     function divertText(){
       const nearest = findNearestAirport(lat, lon, 10);
@@ -6015,8 +6164,15 @@ else if(onGround && surfaceDep){
       if(p.__prefile) cand = { phase:"PREFILE", rank:6, text: statusTxt("prefile"), cls:"info", finished:false };
       else if(airborne){
         if(goAroundOk) cand = { phase:"GOAROUND", rank:0, text: statusTxt("goaround"), cls:"warn", finished:false };
-        else if(finalOk) cand = { phase:"FINAL", rank:0, text: statusTxt("final"), cls:"warn", finished:false };
-        else if(approachOk) cand = { phase:"APPROACH", rank:0, text: statusTxt("approach"), cls:"warn", finished:false };
+        else if(finalOk) {
+             // Enhanced text with Runway
+             const txt = p.arrRwyDes ? statusTxt("final") + ` RWY ${normalizeRunwayDesignator(p.arrRwyDes)}` : statusTxt("final");
+             cand = { phase:"FINAL", rank:0, text: txt, cls:"warn", finished:false };
+        }
+        else if(approachOk) {
+             const txt = p.arrRwyDes ? statusTxt("approach") + ` RWY ${normalizeRunwayDesignator(p.arrRwyDes)}` : statusTxt("approach");
+             cand = { phase:"APPROACH", rank:0, text: txt, cls:"warn", finished:false };
+        }
         else if(descending && alt < 30000 && dArr != null && dArr < 180) cand = { phase:"DESCENT", rank:1, text: statusTxt("descent"), cls:"info", finished:false };
         else if(stableCruise) cand = { phase:"CRUISE", rank:1, text: statusTxt("cruise"), cls:"good", finished:false };
         else if(airborne && dDep != null && dDep < depBand && (climbing || alt < 18000)) cand = { phase:"DEPAREA", rank:2, text: statusTxt("deparea"), cls:"info", finished:false };
@@ -6164,23 +6320,74 @@ else if(onGround && surfaceDep){
     }
   }
 
-  function computeDynamicEtaTs(p, destAp, phase){
-    if(!p || !destAp) return null;
+  // Updated to accept optional specific target coordinates (e.g. Runway Threshold)
+  function computeDynamicEtaTs(p, destAp, phase, targetCoords=null){
+    if(!p) return null;
     const lat = Number(p.latitude), lon = Number(p.longitude);
+    const alt = Number(p.altitude || 0);
+    const gs = Number(p.groundspeed || 0);
+    const targetLat = targetCoords ? targetCoords.lat : (destAp ? destAp.latitude : null);
+    const targetLon = targetCoords ? targetCoords.lon : (destAp ? destAp.longitude : null);
+    const targetElev = destAp ? (destAp.elevation || 0) : 0;
+
+    if(targetLat == null || targetLon == null) return null;
     if(!isFinite(lat) || !isFinite(lon)) return null;
     const now = Date.now();
-    const distNm = haversineNm(lat, lon, destAp.latitude, destAp.longitude);
+    const distNm = haversineNm(lat, lon, targetLat, targetLon);
     if(!isFinite(distNm)) return null;
-    const prev = prevPilotStates.get(String(p.cid));
-    const derived = computeTrackSpeedKts(prev, lat, lon, now);
-    const gs = Number(p.groundspeed || 0);
-    let speed = Math.max(gs, derived || 0);
-    const minSpeed = (phase==="FINAL" || phase==="APPROACH" || phase==="GOAROUND") ? 85 : 110;
-    speed = Math.max(speed, minSpeed);
-    speed = Math.min(speed, 560);
-    if(distNm < 1.2) return now + 60*1000;
-    const factor = (phase==="FINAL") ? 1.16 : (phase==="APPROACH") ? 1.12 : (phase==="DESCENT") ? 1.08 : (phase==="DEPAREA") ? 1.10 : 1.05;
-    return now + (distNm / speed) * 60 * factor * 60000;
+
+    // SPECIAL: Go-Around Logic
+    // If phase is GOAROUND, distance is irrelevant (we are at the airport but can't land).
+    // Assume a standard missed approach procedure / traffic circuit time (~15 mins).
+    if (phase === "GOAROUND") return now + (15 * 60000);
+
+    // --- NEW ENERGY & SPEED PROFILE LOGIC ---
+
+    // 1. Calculate "Energy Distance" (Track Miles needed to descend)
+    // Rule of thumb: 3nm per 1000ft descent + deceleration buffer.
+    // We compare straight line distance vs. required descent distance and take the larger one.
+    // This handles cases where aircraft is high & fast close to airport (needs vectors/orbit).
+    const heightToLose = Math.max(0, alt - targetElev);
+    // Using 310ft/nm (approx 3 degree glide)
+    const descentDistNm = heightToLose / 310;
+
+    // Effective distance to fly (Geometric vs Energy)
+    // We use a blend logic: If straight distance is much shorter than descent needs, we assume maneuvering.
+    let effectiveDist = Math.max(distNm, descentDistNm);
+
+    // 2. Dynamic Speed Profile
+    // Instead of current GS, we assume a deceleration profile for the remaining miles.
+    // If far out (>50nm), current GS matters most.
+    // If close in (<15nm), landing speed (approx 140kts) matters most.
+    let avgSpeed = gs;
+
+    // On Short Final (< 6NM), trust the actual GS if reasonable (stabilized approach),
+    // otherwise assume standard landing speed.
+    if (effectiveDist < 6) avgSpeed = (gs > 60 && gs < 190) ? gs : 135;
+    else if (effectiveDist < 15) avgSpeed = 160; // Approach / Flaps
+    else if (effectiveDist < 50) avgSpeed = Math.min(gs, 200); // Terminal Area / STAR (Conservative)
+    else if (effectiveDist < 90) avgSpeed = Math.min(gs, 240); // Descent
+    else avgSpeed = Math.max(gs, 300); // Enroute
+
+    // Sanity clamp for speed
+    avgSpeed = Math.max(120, avgSpeed);
+
+    // 3. Time Calculation
+    // t = d / v
+    const hours = effectiveDist / avgSpeed;
+
+    // Add a procedure penalty (turns, ATC spacing) that FADES OUT as we get closer.
+    // 30 NM out: ~2.5 mins penalty (for pattern/vectors).
+    // 8 NM out (Short Final): 0 mins penalty (straight in).
+    let procPenaltyMin = 0;
+    if(effectiveDist < 35 && effectiveDist > 8) {
+        const factor = (effectiveDist - 8) / (35 - 8); // 0.0 at 8nm, 1.0 at 35nm
+        procPenaltyMin = 2.5 * factor;
+    }
+
+    // Deceleration Penalty: If aircraft is fast close in, add time for braking.
+    if (effectiveDist < 25 && gs > 240) procPenaltyMin += 2.0;
+    return now + (hours * 60 * 60000) + (procPenaltyMin * 60000);
   }
   function applyEtaForFlight(f, focusAp, boardType){
     if(boardType !== "arr") return;
@@ -6199,9 +6406,33 @@ else if(onGround && surfaceDep){
         cand = baseDep + durMin*60000;
       }else{ cand = f.etaPlannedTs ?? null; }
     } else {
-      cand = computeDynamicEtaTs(f.pilot, focusAp, phase);
-      if(isFinite(cand) && isFinite(f.etaPlannedTs) && Math.abs(f.etaPlannedTs - cand) < 4*3600*1000) cand = cand*0.70 + f.etaPlannedTs*0.30;
-      else if(!isFinite(cand)) cand = f.etaPlannedTs ?? null;
+      // Use detected runway threshold for precise ETA if available
+      let targetCoords = null;
+      if(f.arrRwyEp) targetCoords = { lat: f.arrRwyEp.lat, lon: f.arrRwyEp.lon };
+
+      cand = computeDynamicEtaTs(f.pilot, focusAp, phase, targetCoords);
+
+      // Progress Blending (Live vs Plan)
+      if(isFinite(cand) && f.fp?.enroute_time){
+         const distFlown = f.dFromPlanNm || 0;
+         const distRem = f.dToFocusNm || 0;
+         const totalDist = distFlown + distRem;
+         const progress = (totalDist > 5) ? (distFlown / totalDist) : 0;
+         const std = f.stdTs || (f.etaPlannedTs - (parseDurationHHMM(f.fp.enroute_time)*60000));
+         const durMin = parseDurationHHMM(f.fp.enroute_time);
+         if(isFinite(std) && durMin){
+             const planEta = std + (durMin * 60000);
+             // Trust Plan early (progress < 20%), Trust Physics late (>90%)
+             let weight = progress < 0.2 ? 0.05 : (progress * progress);
+             if(progress > 0.9) weight = 1.0;
+             // Safety net: if deviation > 1h, trust physics sooner
+             if(Math.abs(cand - planEta) > 60*60000) weight = Math.max(weight, 0.5);
+             cand = (cand * weight) + (planEta * (1 - weight));
+         }
+      }
+
+
+      if(!isFinite(cand)) cand = f.etaPlannedTs ?? null;
       if(isFinite(cand) && cand < (now - 2*60*1000)) cand = now + 2*60*1000;
     }
     const sm = stabilizeEta(etaKey(f.cid, boardType), cand, phase);
@@ -6236,7 +6467,7 @@ else if(onGround && surfaceDep){
       // Map early departure phases to DEPAREA so computeDynamicEtaTs uses a sensible factor.
       const etaPhase = (phase === "DEPARTING" || phase === "CLIMB") ? "DEPAREA" : phase;
       cand = computeDynamicEtaTs(f.pilot, destAp, etaPhase);
-      
+
       // --- NEW INTELLIGENT BLENDING ALGORITHM ---
       // Problem: Immediately after takeoff (climb), Groundspeed is low, resulting in absurdly late ETAs.
       // Solution: Blend 'Live Physics ETA' with 'Plan-Relative ETA' based on flight progress.
@@ -6244,10 +6475,10 @@ else if(onGround && surfaceDep){
          const distFlown = f.dFromFocusNm || 0;
          const distRem = f.dToPlanNm || 0;
          const totalDist = distFlown + distRem;
-         
+
          // Calculate Progress (0.0 to 1.0)
          const progress = (totalDist > 5) ? (distFlown / totalDist) : 0;
-         
+
          // Calculate "Plan-Relative ETA": Now + (TotalPlanTime * RemainingPercentage)
          // This is robust against delays because it calculates relative to "Now" and distance left.
          const durMin = parseDurationHHMM(f.fp.enroute_time);
@@ -6418,9 +6649,10 @@ else if(onGround && surfaceDep){
   let renderEpoch = 0;
 
   class Board {
-    constructor(tbody, boardType){
+    constructor(tbody, boardType, titleEl){
       this.tbody = tbody;
       this.boardType = boardType;
+      this.titleEl = titleEl;
       this.rows = new Map();
     }
     getLayout(){
@@ -6575,9 +6807,9 @@ else if(onGround && surfaceDep){
       }
 
       if(c.altgs){
-		  
-//		Kept for Debugging
-//      c.altgs.textContent = altGsText(f.pilot);		  
+
+//              Kept for Debugging
+//      c.altgs.textContent = altGsText(f.pilot);
 
         // Hide Alt/GS for flights on ground (Gate, Taxi, Lineup) to reduce clutter.
         // Keep it for TAKEOFF to show acceleration.
@@ -6604,17 +6836,16 @@ else if(onGround && surfaceDep){
     async render(list){
       // Board header count (active flights; finished/landed excluded; prefiles included iff shown)
       const activeCount = list.reduce((n, f) => n + (f?.status?.finished ? 0 : 1), 0);
-	  
-      const titleEl = (this.boardType === "dep") ? depTitleEl : arrTitleEl;
+
       const baseTitle = (this.boardType === "dep") ? t("dep_title") : t("arr_title");
       const textVal = `${baseTitle} (${activeCount})`;
 
       // Nur den Textknoten aktualisieren, um das .runwayInfo Element nicht zu zerstören (verhindert Flackern)
-      let textNode = Array.from(titleEl.childNodes).find(n => n.nodeType === 3); // 3 = TEXT_NODE
+      let textNode = Array.from(this.titleEl.childNodes).find(n => n.nodeType === 3); // 3 = TEXT_NODE
       if(textNode) {
          if(textNode.nodeValue !== textVal) textNode.nodeValue = textVal;
       } else {
-         titleEl.prepend(document.createTextNode(textVal));
+         this.titleEl.prepend(document.createTextNode(textVal));
       }
 
       const first = new Map();
@@ -6695,12 +6926,11 @@ else if(onGround && surfaceDep){
     }
   }
 
-  const depBoard = new Board(depBody, "dep");
-  const arrBoard = new Board(arrBody, "arr");
 
   /********************
    * Tooltip
    ********************/
+
   let tooltipActive = false;
   function showTooltip(text, x, y){
     // Allow HTML
@@ -6720,6 +6950,7 @@ else if(onGround && surfaceDep){
     tooltip.style.left = `${e.clientX}px`;
     tooltip.style.top = `${e.clientY}px`;
   });
+
   function attachTooltipDelegation(tbody){
     tbody.addEventListener("mouseover", (e) => {
       const pill = e.target.closest(".xpPill");
@@ -6732,8 +6963,6 @@ else if(onGround && surfaceDep){
       hideTooltip();
     });
   }
-  attachTooltipDelegation(depBody);
-  attachTooltipDelegation(arrBody);
 
   /********************
    * Pilot Modal
@@ -6872,11 +7101,11 @@ else if(onGround && surfaceDep){
   }
   // Store XP data for tabs
   function updateTabsXpMetadata(){
-     // iterate all airports in store
-     for(const [icao, data] of Object.entries(flightStore)){
-        const depIdx = computeBoardXpIndex(data.deps || []);
-        const arrIdx = computeBoardXpIndex(data.arrs || []);
-        data.xpStats = { dep: depIdx, arr: arrIdx };
+     // iterate all active airport boards
+     for(const [icao, boardSet] of airportBoards){
+        const depIdx = computeBoardXpIndex(boardSet.lastDeps || []);
+        const arrIdx = computeBoardXpIndex(boardSet.lastArrs || []);
+        boardSet.xpStats = { dep: depIdx, arr: arrIdx };
      }
         }
   // Scheduling wrapper mainly for UI updates if needed, but tabs handle tooltip on hover dynamically
@@ -6978,8 +7207,10 @@ else if(onGround && surfaceDep){
     cfgPrefiles.checked = !!settings.showPrefiles;
     cfgHideArrLanded.checked = !!settings.hideArrivalsLanded;
     cfgHideDepFinished.checked = !!settings.hideDeparturesFinished;
-        cfgHidePredictive.checked = !!settings.hidePredictiveRunways;
-        cfgAgeBonus.checked = !!settings.xpAgeBonusEnabled;
+    cfgHidePredictive.checked = !!settings.hidePredictiveRunways;
+    cfgHideLocal.checked = !!settings.hideLocalFlights;
+    cfgHideVfr.checked = !!settings.hideVfrFlights;
+    cfgAgeBonus.checked = !!settings.xpAgeBonusEnabled;
 
     const th = normalizedThresholds(settings.xpThresholds);
     cfgT1.value = th.t1; cfgT2.value = th.t2; cfgT3.value = th.t3; cfgT4.value = th.t4;
@@ -7006,7 +7237,9 @@ else if(onGround && surfaceDep){
     cfgHideArrLanded.checked = DEFAULTS.hideArrivalsLanded;
     cfgHideDepFinished.checked = DEFAULTS.hideDeparturesFinished;
     cfgHidePredictive.checked = DEFAULTS.hidePredictiveRunways;
-        cfgAgeBonus.checked = DEFAULTS.xpAgeBonusEnabled;
+    cfgHideLocal.checked = DEFAULTS.hideLocalFlights;
+    cfgHideVfr.checked = DEFAULTS.hideVfrFlights;
+    cfgAgeBonus.checked = DEFAULTS.xpAgeBonusEnabled;
     cfgT1.value = DEFAULTS.xpThresholds.t1;
     cfgT2.value = DEFAULTS.xpThresholds.t2;
     cfgT3.value = DEFAULTS.xpThresholds.t3;
@@ -7046,10 +7279,13 @@ else if(onGround && surfaceDep){
     etdCacheDirty = false;
     flightStateDirty = false;
     inflightXp.clear();
-    for(const f of [...lastDeps, ...lastArrs]){
-      f.details = null; f.stats = null; f.exp = null;
-      depBoard.updateXpById(f.id);
-      arrBoard.updateXpById(f.id);
+
+    for(const [icao, boardSet] of airportBoards){
+        for(const f of [...(boardSet.lastDeps||[]), ...(boardSet.lastArrs||[])]){
+            f.details = null; f.stats = null; f.exp = null;
+            boardSet.depBoard.updateXpById(f.id);
+            boardSet.arrBoard.updateXpById(f.id);
+        }
     }
     requestXpForVisibleFlights();
     scheduleAirportXpIndexUpdate();
@@ -7076,6 +7312,8 @@ else if(onGround && surfaceDep){
     settings.hideArrivalsLanded = !!cfgHideArrLanded.checked;
     settings.hideDeparturesFinished = !!cfgHideDepFinished.checked;
     settings.hidePredictiveRunways = !!cfgHidePredictive.checked;
+    settings.hideLocalFlights = !!cfgHideLocal.checked;
+    settings.hideVfrFlights = !!cfgHideVfr.checked;
 
     settings.xpThresholds = th;
         settings.xpAgeBonusEnabled = !!cfgAgeBonus.checked;
@@ -7093,8 +7331,8 @@ else if(onGround && surfaceDep){
 
     // Apply UI updates
     applyLanguage();
-    depBoard.reset();
-    arrBoard.reset();
+    // Clear all boards
+    for(const b of airportBoards.values()){ b.depBoard.reset(); b.arrBoard.reset(); }
 
     await initTabs();
     closeConfigModal();
@@ -7107,15 +7345,97 @@ else if(onGround && surfaceDep){
   let lastFeedTs = null;
   let feedTimer = null;
 
-  // We keep a store of the calculated board state for each configured airport
-  // { "EDDB": { deps:[], arrs:[] }, "EDDF": ... }
-  let flightStore = {};
+  // NEW: Airport Boards Container
+  // Map<ICAO, { container, depBoard, arrBoard, lastDeps:[], lastArrs:[], ui:{...} }>
+  const airportBoards = new Map();
+
+  // Global refs kept for legacy helper access if needed, but primary source is now airportBoards
 
   let lastDeps = [];
   let lastArrs = [];
   let flightsByCid = new Map();
   let inflightXp = new Map();
   let resortTimers = { dep:null, arr:null };
+
+  function setupAirportView(icao){
+     if(airportBoards.has(icao)) return airportBoards.get(icao);
+
+     const clone = viewTemplate.content.cloneNode(true);
+     const container = clone.querySelector('.airport-view');
+     container.dataset.icao = icao;
+
+     // Scope UI lookups to this clone
+     const q = (sel) => container.querySelector(sel);
+     const ui = {
+        depTitle: q('.js-depTitle'),
+        arrTitle: q('.js-arrTitle'),
+        depSort: q('.js-depSort'),
+        arrSort: q('.js-arrSort'),
+        depDir: q('.js-depDir'),
+        arrDir: q('.js-arrDir'),
+        depHeadRow: q('.js-depHeadRow'),
+        arrHeadRow: q('.js-arrHeadRow'),
+        depBody: q('.js-depBody'),
+        arrBody: q('.js-arrBody'),
+        depTable: q('.js-depTable'),
+        arrTable: q('.js-arrTable'),
+        depSortHint: q('.boardHeader .mini .hint'), // assuming first one is dep
+        arrSortHint: q('.board:nth-child(2) .boardHeader .mini .hint')
+     };
+
+     // Setup Sort Options
+     ui.depSort.innerHTML = createSortOptionsHtml(settings.depSort.by, 'dep');
+     ui.arrSort.innerHTML = createSortOptionsHtml(settings.arrSort.by, 'arr');
+     ui.depDir.textContent = settings.depSort.dir === 1 ? "▲" : "▼";
+     ui.arrDir.textContent = settings.arrSort.dir === 1 ? "▲" : "▼";
+     ui.depDir.title = t("dep_dir_title");
+     ui.arrDir.title = t("arr_dir_title");
+
+     // Setup Headers
+     buildHeaderFor("dep", ui.depHeadRow);
+     buildHeaderFor("arr", ui.arrHeadRow);
+
+     // Instantiate Boards
+     const depBoard = new Board(ui.depBody, "dep", ui.depTitle);
+     const arrBoard = new Board(ui.arrBody, "arr", ui.arrTitle);
+
+     // Attach Events (Scoped to this view)
+     // When sorting changes, we update global settings AND re-sort THIS board immediately.
+     // Note: This changes settings for ALL boards, as FIDS usually have uniform settings.
+     const triggerSort = (which) => {
+        saveSettings();
+        // Re-sort and render this specific board immediately
+        const entry = airportBoards.get(icao);
+        if(entry){
+            if(which === 'dep') {
+                entry.lastDeps = sortFlights(entry.lastDeps, settings.depSort, "dep");
+                entry.depBoard.render(entry.lastDeps);
+            } else {
+                entry.lastArrs = sortFlights(entry.lastArrs, settings.arrSort, "arr");
+                entry.arrBoard.render(entry.lastArrs);
+            }
+        }
+        // Also trigger generic resort for others? Optional.
+        // Since we refresh every 15s, other tabs will update eventually, or we could loop all.
+        // For now, updating current is enough feedback.
+     };
+
+     ui.depSort.addEventListener("change", () => { settings.depSort.by = ui.depSort.value; triggerSort('dep'); });
+     ui.depDir.addEventListener("click", () => { settings.depSort.dir *= -1; ui.depDir.textContent = settings.depSort.dir === 1 ? "▲" : "▼"; triggerSort('dep'); });
+
+     ui.arrSort.addEventListener("change", () => { settings.arrSort.by = ui.arrSort.value; triggerSort('arr'); });
+     ui.arrDir.addEventListener("click", () => { settings.arrSort.dir *= -1; ui.arrDir.textContent = settings.arrSort.dir === 1 ? "▲" : "▼"; triggerSort('arr'); });
+
+     attachTooltipDelegation(ui.depBody);
+     attachTooltipDelegation(ui.arrBody);
+
+     boardsContainer.appendChild(container);
+
+     const entry = { container, depBoard, arrBoard, lastDeps:[], lastArrs:[], ui, xpStats:null };
+     airportBoards.set(icao, entry);
+     return entry;
+  }
+
 
   // Build the tab UI based on settings.airports
   async function initTabs(){
@@ -7124,6 +7444,17 @@ else if(onGround && surfaceDep){
      list = [...new Set(list)];
      if(list.length === 0) list = ["EDDB"];
      settings.airports = list; // Logic uses compact list
+     // Setup / Cleanup Views
+     // 1. Create missing views
+     for(const icao of list) setupAirportView(icao);
+
+     // 2. Remove unused views
+     for(const [icao, entry] of airportBoards){
+         if(!list.includes(icao)){
+             entry.container.remove();
+             airportBoards.delete(icao);
+         }
+     }
      // Sync active tab
      if(!list.includes(settings.activeTab)) settings.activeTab = list[0];
      saveSettings();
@@ -7142,9 +7473,9 @@ else if(onGround && surfaceDep){
            btn.addEventListener("click", () => switchTab(code));
            // Add Tooltip for XP stats
            btn.addEventListener("mouseover", (e) => {
-              const store = flightStore[code];
-              if(!store || !store.xpStats) return;
-              const xp = store.xpStats;
+              const entry = airportBoards.get(code);
+              if(!entry || !entry.xpStats) return;
+              const xp = entry.xpStats;
 
               const makeRows = () => {
                  // Helper to generate the grid content
@@ -7190,8 +7521,6 @@ else if(onGround && surfaceDep){
      }
 
 
-     // Clear old store to avoid ghosts
-     flightStore = {};
      limiter.clear();
      inflightXp.clear();
 
@@ -7205,8 +7534,20 @@ else if(onGround && surfaceDep){
      settings.activeTab = icao;
      saveSettings(); // Persist active tab immediately
      updateTabUi();
-     renderBoardsFromStore();
-	 
+
+    // Toggle Container Visibility
+    for(const [code, entry] of airportBoards){
+        entry.container.style.display = (code === icao) ? "grid" : "none";
+    }
+
+    // Legacy global sync for sorting/XP logic usage
+    const activeEntry = airportBoards.get(icao);
+    if(activeEntry){
+        lastDeps = activeEntry.lastDeps;
+        lastArrs = activeEntry.lastArrs;
+        currentAirportIcao = icao;
+    }
+
      // Show spinner immediately if we don't have runway data yet
      if (!globalActiveRunways[icao]) {
          renderLoadingRunways(icao);
@@ -7221,21 +7562,22 @@ else if(onGround && surfaceDep){
         if(!code) continue; // skip disabled/empty tabs
         btn.classList.toggle("active", code === settings.activeTab);
      }
+
+    // Init Visibility
+    for(const [code, entry] of airportBoards){
+        entry.container.style.display = (code === settings.activeTab) ? "grid" : "none";
+    }
   }
 
   async function renderBoardsFromStore(){
-     const data = flightStore[settings.activeTab] || { deps:[], arrs:[] };
-     // Update globals so sorting/tooltips work
-     currentAirportIcao = settings.activeTab;
-     lastDeps = data.deps;
-     lastArrs = data.arrs;
-
-     // Update Headers
-     depTitleEl.textContent = `${t("dep_title")} (${lastDeps.length})`;
-     arrTitleEl.textContent = `${t("arr_title")} (${lastArrs.length})`;
-
-     await depBoard.render(lastDeps);
-     await arrBoard.render(lastArrs);
+     // NO-OP in new architecture (rendering happens in loop)
+     // But we update globals for legacy support
+     const active = airportBoards.get(settings.activeTab);
+     if(active){
+         lastDeps = active.lastDeps;
+         lastArrs = active.lastArrs;
+         currentAirportIcao = settings.activeTab;
+     }
   }
 
   function setFeedStatus({ok, msg, ageSec}){
@@ -7368,12 +7710,15 @@ else if(onGround && surfaceDep){
     if(resortTimers[which]) clearTimeout(resortTimers[which]);
     resortTimers[which] = setTimeout(async () => {
       resortTimers[which] = null;
-      if(which === "dep"){
-        lastDeps = sortFlights(lastDeps, settings.depSort, "dep");
-        await depBoard.render(lastDeps);
-      }else{
-        lastArrs = sortFlights(lastArrs, settings.arrSort, "arr");
-        await arrBoard.render(lastArrs);
+      // Iterate all active boards and re-sort/render if XP sorting is active
+      for(const boardSet of airportBoards.values()){
+          if(which === "dep"){
+            boardSet.lastDeps = sortFlights(boardSet.lastDeps, settings.depSort, "dep");
+            boardSet.depBoard.render(boardSet.lastDeps);
+          }else{
+            boardSet.lastArrs = sortFlights(boardSet.lastArrs, settings.arrSort, "arr");
+            boardSet.arrBoard.render(boardSet.lastArrs);
+          }
       }
       scheduleAirportXpIndexUpdate();
     }, 650);
@@ -7381,26 +7726,29 @@ else if(onGround && surfaceDep){
 
   // Fair scheduling (interleaving)
   function requestXpForVisibleFlights(){
-	// const max = 45; // Hardcoded limit per cycle to protect API
-    // Limit removed to utilize DB cache fully. RateLimiter still protects external API.	
+        // const max = 45; // Hardcoded limit per cycle to protect API
+    // Limit removed to utilize DB cache fully. RateLimiter still protects external API.
 
     // Collect candidates from ALL airports (background processing)
     const allCandidates = [];
-    for(const store of Object.values(flightStore)){
-       if(store.deps) allCandidates.push(...store.deps);
-       if(store.arrs) allCandidates.push(...store.arrs);
-    }
+    for(const boardSet of airportBoards.values()){
+       if(boardSet.lastDeps) allCandidates.push(...boardSet.lastDeps);
+       if(boardSet.lastArrs) allCandidates.push(...boardSet.lastArrs);
+     }
 
     // Slice to max limit per cycle
     // const targets = allCandidates.slice(0, max);
-    
-	// Process all candidates
-    const targets = allCandidates;	
+
+        // Process all candidates
+    const targets = allCandidates;
 
     for(const f of targets){
       applyCachedXpIfAvailable(f);
-      depBoard.updateXpById(f.id);
-      arrBoard.updateXpById(f.id);
+      // Update XP cell on ALL boards where this flight might appear
+      for(const boardSet of airportBoards.values()){
+          boardSet.depBoard.updateXpById(f.id);
+          boardSet.arrBoard.updateXpById(f.id);
+      }
     }
     scheduleAirportXpIndexUpdate();
 
@@ -7420,8 +7768,11 @@ else if(onGround && surfaceDep){
           f.details = details;
           f.stats = stats;
           f.exp = exp;
-          depBoard.updateXpById(f.id);
-          arrBoard.updateXpById(f.id);
+          // Update UI on all boards
+          for(const boardSet of airportBoards.values()){
+              boardSet.depBoard.updateXpById(f.id);
+              boardSet.arrBoard.updateXpById(f.id);
+          }
         }
         scheduleResort("dep");
         scheduleResort("arr");
@@ -7441,8 +7792,6 @@ else if(onGround && surfaceDep){
       const pilots = Array.isArray(data?.pilots) ? data.pilots : [];
       const prefiles = (settings.showPrefiles && Array.isArray(data?.prefiles)) ? data.prefiles : [];
 
-      // Prepare new store
-      const newStore = {};
       flightsByCid = new Map();
 
       const nextPrev = new Map(prevPilotStates);
@@ -7454,6 +7803,8 @@ else if(onGround && surfaceDep){
 
       // LOOP THROUGH ALL CONFIGURED AIRPORTS
       for(const airportIcao of settings.airports){
+          const boardSet = airportBoards.get(airportIcao);
+          if(!boardSet) continue; // should not happen if initTabs called
           const focus = airportIcao;
           const focusAp = getAirport(focus);
 
@@ -7471,6 +7822,14 @@ else if(onGround && surfaceDep){
 
             const dep = normalizeCode(fp.departure);
             const arr = normalizeCode(fp.arrival);
+
+            // Filter: Local Flights
+            if(settings.hideLocalFlights && dep === arr) continue;
+
+            // Filter: VFR
+            if(settings.hideVfrFlights && fp?.flight_rules === "V"){
+              continue;
+            }
 
             if(dep === focus){
               const f = buildFlightObjectFromPilot(p);
@@ -7492,6 +7851,9 @@ else if(onGround && surfaceDep){
 
             if(arr === focus){
               const f = buildFlightObjectFromPilot(p);
+              // Attach back-reference to pilot on the flight object so classifyFlight/ETA calcs can share data
+              f.pilot = p; // (already done in buildFlightObjectFromPilot but ensuring consistency)
+
               f.status = classifyFlight(p, "arr");
               if(focusAp && isFinite(p.latitude) && isFinite(p.longitude)) f.dToFocusNm = haversineNm(Number(p.latitude), Number(p.longitude), focusAp.latitude, focusAp.longitude);
               const depAp = getAirport(dep);
@@ -7512,6 +7874,12 @@ else if(onGround && surfaceDep){
                if(!fp?.departure || !fp?.arrival) continue;
                const dep = normalizeCode(fp.departure);
                const arr = normalizeCode(fp.arrival);
+
+               // Filter: Local Flights (Prefile)
+               if(settings.hideLocalFlights && dep === arr) continue;
+               // Filter: VFR (Prefile)
+               if(settings.hideVfrFlights && fp?.flight_rules === "V") continue;
+
                if(dep === focus){
                  const f = buildFlightObjectFromPrefile(pf);
                  f.status = classifyFlight({ ...f.pilot, cid: f.cid, flight_plan: f.fp }, "dep");
@@ -7534,14 +7902,12 @@ else if(onGround && surfaceDep){
           }
 
           // Sort individually for this airport context
-          // NOTE: sorting uses global 'lastDeps' internally in sort functions if we were reusing them incorrectly,
-          // but sortFlights takes list as arg. However, sortFlights uses 'depDisplayTimeTs' which uses global state? No.
-          // Wait, sortFlights is pure func.
-          flightStore[focus] = {
-             deps: sortFlights(deps, settings.depSort, "dep"),
-             arrs: sortFlights(arrs, settings.arrSort, "arr")
+          boardSet.lastDeps = sortFlights(deps, settings.depSort, "dep");
+          boardSet.lastArrs = sortFlights(arrs, settings.arrSort, "arr");
 
-          };
+          // Render this board immediately (in background or foreground)
+          boardSet.depBoard.render(boardSet.lastDeps);
+          boardSet.arrBoard.render(boardSet.lastArrs);
 
           // Calc XP stats for this airport immediately
           updateTabsXpMetadata();
@@ -7638,24 +8004,18 @@ else if(onGround && surfaceDep){
 
   refreshBtn.addEventListener("click", refresh);
 
-  depSortEl.addEventListener("change", () => { settings.depSort.by = depSortEl.value; saveSettings(); refresh(); });
-  depDirBtn.addEventListener("click", () => { settings.depSort.dir *= -1; depDirBtn.textContent = settings.depSort.dir === 1 ? "▲" : "▼"; saveSettings(); refresh(); });
-
-  arrSortEl.addEventListener("change", () => { settings.arrSort.by = arrSortEl.value; saveSettings(); refresh(); });
-  arrDirBtn.addEventListener("click", () => { settings.arrSort.dir *= -1; arrDirBtn.textContent = settings.arrSort.dir === 1 ? "▲" : "▼"; saveSettings(); refresh(); });
+// Legacy Listeners removed; they are now scoped in setupAirportView
 
   /********************
    * Boot
    ********************/
   async function boot(){
-    depDirBtn.textContent = settings.depSort.dir === 1 ? "▲" : "▼";
-    arrDirBtn.textContent = settings.arrSort.dir === 1 ? "▲" : "▼";
 
     memberCache = await loadMemberCache();
     gateFlightCache = await loadGateFlightCache();
     await TaxiTimeManager.load();
-	
-    await loadRexRules(); // WICHTIG: Await, damit Rules VOR der ersten Prediction da sind!	
+
+    await loadRexRules(); // WICHTIG: Await, damit Rules VOR der ersten Prediction da sind!
 
     await ensureAirportIndex();
 
