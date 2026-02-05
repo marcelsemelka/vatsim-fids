@@ -1,3 +1,23 @@
+<?php
+/**
+ * VATSIM FIDS - WordPress Authentication Wrapper
+ */
+
+// Versuche wp-load.php zu finden (Aktueller Ordner, Elternordner oder Document Root)
+$possible_paths = [
+    __DIR__ . '/wp-load.php',
+    dirname(__DIR__) . '/wp-load.php',
+    $_SERVER['DOCUMENT_ROOT'] . '/wp-load.php'
+];
+
+foreach ($possible_paths as $path) {
+    if (file_exists($path)) {
+        require_once($path);
+        if (!is_user_logged_in()) { auth_redirect(); exit; }
+        break;
+    }
+}
+?>
 <!doctype html>
 <html lang="de">
 <head>
@@ -93,7 +113,7 @@
 		
     
     /* Global Runway Display in Header (Left Side) */
-    .runwayGlobal { display: flex; font-size: 11px; cursor: help; align-items: center; gap: 16px; margin-left: 20px; padding-left: 20px; border-left: 1px solid var(--glass-border); height: 32px; }
+    .runwayGlobal { display: flex; font-size: 20px; cursor: help; align-items: center; gap: 16px; margin-left: 20px; padding-left: 20px; border-left: 1px solid var(--glass-border); height: 32px; }
     .runwayGroup { display: flex; align-items: center; gap: 6px; font-family: var(--font-mono); font-size: 11px; color: var(--text-muted); }
     .runwayGroup .lbl { font-weight: 600; letter-spacing: 0.05em; text-transform: uppercase; font-size: 10px; opacity: 0.7; }
     .runwayGroup .val { font-weight: 700; color: #fff; background: rgba(255,255,255,0.05); padding: 2px 6px; border-radius: 4px; border: 1px solid rgba(255,255,255,0.1); }
@@ -585,6 +605,7 @@
     enabled: true, // HIER AKTIVIEREN/DEAKTIVIEREN
     apiUrl: "vFIDS_api.php"
   };
+  const REX_RULES_URL = "rex_rwys.json";  
   const VATSIM_DATA_URL = "https://data.vatsim.net/v3/vatsim-data.json";
   const CORE_API_BASE = "https://api.vatsim.net/v2";
   const CORS_PROXY = "https://vfids.marcelsemelka.workers.dev/?url=";
@@ -739,6 +760,7 @@
       status_gate_named_at: "AM GATE {gate} @{icao}",
           status_gate_plain_at: "AM GATE @{icao}",
           status_takeoff: "TAKEOFF",
+		  status_takeoff_rwy: "TAKEOFF RWY {rwy}",		  
           status_lineup: "LINEUP",
           status_lineup_rwy: "LINEUP RWY {rwy}",
           status_local: "LOCAL",
@@ -885,6 +907,7 @@
       status_gate_named_at: "AT GATE {gate} @{icao}",
           status_gate_plain_at: "AT GATE @{icao}",
           status_takeoff: "TAKEOFF",
+		  status_takeoff_rwy: "TAKEOFF RWY {rwy}",		  
           status_lineup: "LINEUP",
           status_lineup_rwy: "LINEUP RWY {rwy}",
           status_local: "LOCAL",
@@ -1202,6 +1225,7 @@ const GATE_JITTER_GRACE_MS = 20 * 1000;    // kurzzeitig minimal bewegt -> Gate 
 
   let settings = loadSettings();
   let memberCache = {}; // Initial leer, wird in boot() geladen
+  let rexRules = {}; // Regelwerk für Runway-Prediction  
   let currentVatsimData = null; // Speichert den letzten Feed für Config-Reloads
   // Global store for active runways per airport (for ETD calc)
   let globalActiveRunways = {};
@@ -1907,60 +1931,163 @@ function parseActiveRunways(station) {
     return result;
 }
 
+// Helper für REX Rules: Zeitfenster prüfen (UTC)
+function checkTimeRange(startStr, endStr) {
+    if (!startStr || !endStr) return true;
+    const now = new Date();
+    const curMin = now.getUTCHours() * 60 + now.getUTCMinutes();
+
+    const [sH, sM] = startStr.split(":").map(Number);
+    const [eH, eM] = endStr.split(":").map(Number);
+    const startMin = sH * 60 + sM;
+    const endMin = eH * 60 + eM;
+
+    if (startMin <= endMin) {
+        // Normaler Bereich (z.B. 09:00 - 14:00)
+        return curMin >= startMin && curMin <= endMin;
+    } else {
+        // Über Mitternacht (z.B. 22:00 - 06:00)
+        return curMin >= startMin || curMin <= endMin;
+    }
+}
+
+// Helper für REX Rules: Evaluierung einer einzelnen Runway-Operation
+function checkRexRestriction(icao, rwyDes, opType, metar) {
+    const airportRules = rexRules[icao];
+    if (!airportRules) return { allowed: true, priority: 99 }; // Keine Regeln -> Default OK
+
+    const rwyRules = airportRules[rwyDes];
+    if (!rwyRules) return { allowed: true, priority: 99 };
+
+    const op = rwyRules[opType]; // "landing" oder "takeoff"
+    if (!op) return { allowed: true, priority: 99 };
+
+    // 1. Basis-Status
+    if (op.status === "FORBIDDEN") return { allowed: false, reason: "Status FORBIDDEN" };
+
+    // 2. Restrictions prüfen
+    if (Array.isArray(op.restrictions)) {
+        const windDir = (metar.wind && metar.wind.dir !== "VRB") ? Number(metar.wind.dir) : 0;
+        const windSpd = (metar.wind) ? Number(metar.wind.spd) : 0;
+        const rwyHdg = parseInt(rwyDes.substring(0, 2)) * 10;
+
+        // Komponenten berechnen
+        const rad = (windDir - rwyHdg) * (Math.PI / 180);
+        const headwind = Math.cos(rad) * windSpd;
+        const tailwind = -headwind;
+        const crosswind = Math.abs(Math.sin(rad) * windSpd);
+
+        for (const res of op.restrictions) {
+            let conditionMet = false;
+
+            if (res.type === "TIME_UTC") {
+                conditionMet = checkTimeRange(res.start, res.end);
+                if (res.condition === "ALTERNATION_WEEKLY") {
+                    // Simple Fallback: Even/Odd ISO Week logic könnte hier hin. Ignorieren wir erstmal.
+                    conditionMet = false;
+                }
+            } else if (res.type === "METAR_WIND") {
+                if (res.condition === "TAILWIND_LIMIT") {
+                    if (tailwind > (res.limit_kt || 999)) conditionMet = true;
+                } else if (res.condition === "CROSSWIND_LIMIT") {
+                    if (crosswind > (res.limit_kt || 999)) conditionMet = true;
+                } else if (res.condition === "HEADWIND_REQUIRED") {
+                     // Bedingung ist "Wir haben Headwind".
+                     // Enforcement REQUIRED_FOR_USE heißt: Wenn KEIN Headwind -> Forbidden.
+                     // Hier mappen wir: conditionMet = "Haben wir Headwind?"
+                     conditionMet = (headwind >= (res.min_kt || 0));
+                } else if (res.condition === "SECTOR") {
+                    // Einfacher Sektor-Check (ohne 360-Wrap Logik für Kürze vereinfacht)
+                    conditionMet = (windDir >= res.from_deg && windDir <= res.to_deg);
+                }
+            } else if (res.type === "METAR_VISIBILITY") {
+                // Placeholder
+            }
+
+            // Auswertung Enforcement
+            if (res.enforcement === "FORBIDDEN") {
+                if (conditionMet) return { allowed: false, reason: `Rule ${res.type} matched FORBIDDEN` };
+            } else if (res.enforcement === "REQUIRED_FOR_USE") {
+                if (!conditionMet) return { allowed: false, reason: `Rule ${res.type} requirement unmet` };
+            }
+        }
+    }
+
+    // Wenn Status RESTRICTED war, aber keine Restriction gegriffen hat (oder alle erfüllt sind) -> Allowed
+    return { allowed: true, priority: op.priority || 5 };
+}
+
 function predictRunways(icao, metar, history) {
-    // Einfache Vorhersage basierend auf Wind (Headwind)
-    // Benötigt runwayIndex (wird asynchron geladen, hier best-effort sync check)
+
     const rIdx = runwayIndexByIcao.get(icao);
-    if (!rIdx) { console.log(`RWY DEBUG PRED ${icao}: No Runway Index available`); return null; }
 
-    // Wenn Historie vorhanden, prüfe ob der Wind ähnlich war und nimm die historische Config
-    // (Vereinfachung: wir nehmen hier erstmal nur Wind-Logik als Fallback)
+    if (!rIdx) return null;
 
-    // FIX: Support both raw METAR objects and cached objects with nested .wind property
     const wDirVal = (metar.wind && metar.wind.dir != null) ? metar.wind.dir : metar.wdir;
     const wSpdVal = (metar.wind && metar.wind.spd != null) ? metar.wind.spd : metar.wspd;
 	
-    if (wDirVal == null) { console.log(`RWY DEBUG PRED ${icao}: No METAR/Wind available (Obj: ${JSON.stringify(metar)})`); return null; }	
+    if (wDirVal == null) return null;
 
 
     const windDir = wDirVal === "VRB" ? 0 : Number(wDirVal);
     const windSpd = Number(wSpdVal || 0);
 	
-    let bestGroupScore = -999;
-    let bestGroup = null;
-    
-    // Group endpoints by numeric designator (e.g. "07L", "07R" -> "07")
-    const groups = {};
+    const arrCandidates = [];
+    const depCandidates = [];
+
+    // Alle bekannten Endpoints prüfen
     rIdx.endpoints.forEach(ep => {
         const des = ep.designator;
-        const num = parseInt(des.substring(0, 2), 10);
-        if(!num) return;
-        const key = String(num).padStart(2, '0'); // "07"
-        if(!groups[key]) groups[key] = [];
-        if(!groups[key].includes(des)) groups[key].push(des);
-    });
+        const num = parseInt(des.substring(0, 2), 10) * 10;
 
-    // Evaluate each group
-
-    for (const [key, designators] of Object.entries(groups)) {
-        const num = parseInt(key) * 10;
-
-        // Headwind Component = Cos(WindDir - RwyHdg) * WindSpd
+        // Physics: Headwind Score
         const diff = (windDir - num) * (Math.PI / 180);
         const hw = Math.cos(diff) * windSpd;
-        
-        if(hw > bestGroupScore) {
-            bestGroupScore = hw;
-            bestGroup = designators;
-        }
-    }
-	
-    const bestRwy = bestGroup || [];	
 
-    console.log(`RWY DEBUG PRED ${icao}: Wind ${windDir}/${windSpd} ->`, bestRwy);
+        // Rules: JSON Logic Check
+        const arrCheck = checkRexRestriction(icao, des, "landing", { wind: { dir: windDir, spd: windSpd } });
+        const depCheck = checkRexRestriction(icao, des, "takeoff", { wind: { dir: windDir, spd: windSpd } });
+
+        if (arrCheck.allowed) {
+            // Score = Headwind + Priority-Bonus (Prio 1 = +100kt Score, Prio 2 = +50kt)
+            // Damit sticht eine Prio-Bahn auch bei leichtem Tailwind eine Non-Prio-Bahn mit Headwind aus.
+            const prioBonus = (10 - (arrCheck.priority || 5)) * 15; 
+            arrCandidates.push({ des, score: hw + prioBonus });
+        }
+        if (depCheck.allowed) {
+            const prioBonus = (10 - (depCheck.priority || 5)) * 15;
+            depCandidates.push({ des, score: hw + prioBonus });
+        }
+    });
+
+    // Sortieren und Top-Picks nehmen
+    arrCandidates.sort((a, b) => b.score - a.score);
+    depCandidates.sort((a, b) => b.score - a.score);
+
+    // COHERENCE CHECK: Filter reciprocals (Gegenbahn-Verbot)
+    // Die Runway mit dem höchsten Score definiert die "Flow Direction".
+    // Alle anderen müssen grob in die gleiche Richtung zeigen (< 90° Abweichung).
+    const filterCoherent = (list) => {
+        if (list.length === 0) return [];
+        const primary = list[0]; // Der Gewinner
+        const primHdg = parseInt(primary.des.substring(0, 2), 10) * 10;
+
+        return list.filter(c => {
+            const h = parseInt(c.des.substring(0, 2), 10) * 10;
+            let diff = Math.abs(primHdg - h);
+            if (diff > 180) diff = 360 - diff;
+            // Erlaube parallele (0°) und kreuzende (<90°) Bahnen, aber keine Gegenbahnen (>90°)
+            return diff < 85; 
+        }).slice(0, 3).map(c => c.des);
+    };
+
+    const bestArr = filterCoherent(arrCandidates);
+    const bestDep = filterCoherent(depCandidates);
+
+    console.log(`RWY PRED ${icao} (Rex Rules):`, { arr: bestArr, dep: bestDep });
     return {
-        arrivals: bestRwy,
-        departures: bestRwy,
+        arrivals: bestArr,
+        departures: bestDep,
         isPrediction: true
     };
 }
@@ -2173,7 +2300,9 @@ function renderRunwayInfo(icao, info, atisCode) {
             container.className = isPred ? "runwayGlobal pred" : "runwayGlobal atis";
             container.title = isPred ? "Prognose basierend auf Wind (Keine ATIS)" : "Aktive Runways laut ATIS";
             
-            const icon = isPred ? `<span style="color:var(--warn); margin-right:4px;">⚠</span>` : "";
+            const icon = isPred 
+                ? `<span style="color:var(--warn); margin-right:4px;">⚠</span>` 
+                : `<span style="color:var(--info); margin-right:4px; font-size:1.1em;">🛈</span>`;
             
             // Stable Update: innerHTML replace is fine here because this container is NOT redrawn by board refresh loops
             container.innerHTML = `
@@ -2947,6 +3076,14 @@ out geom;
     if(maxM != null && best > maxM) return null;
     return best;
   }
+  
+  async function loadRexRules(){
+    try {
+        const res = await fetch(REX_RULES_URL);
+        if(res.ok) rexRules = await res.json();
+        console.log("REX Rules loaded:", Object.keys(rexRules).length, "airports");
+    } catch(e) { console.warn("REX Rules load failed", e); }
+  }  
 
   function pruneTaxiMem(){
     const now = Date.now();
@@ -4382,7 +4519,7 @@ out geom tags;
     const inflight = limiter.inFlight || 0;
 
     apiDot.className = "dot " + (backoff ? "bad" : (q>0 || inflight) ? "warn" : "good");
-    apiText.textContent = `API Q: ${q}`;
+    apiText.textContent = `API Q: ${q + inflight}`
 
     if(backoff){
       apiExtra.textContent = `${Math.ceil((limiter.backoffUntil-now)/1000)}s`;
@@ -5355,10 +5492,16 @@ out geom tags;
   function detectDepartureLineupRwy(p, fp, focusIcao){
     try{
       if(!p || !fp) return null;
-      const gs = Number(p.groundspeed || 0);
-      if(!isFinite(gs) || gs > LINEUP_GS_MAX_KTS) return null;
       const lat = Number(p.latitude), lon = Number(p.longitude);
       if(!isFinite(lat) || !isFinite(lon)) return null;
+	  
+      // Determine max allowed speed for lineup detection.
+      // Standard: 24kts. If we just merged onto axis (rolling lineup), allow up to 38kts
+      // to catch the turn before the takeoff acceleration spikes GS.
+      // Note: We check specific conditions below before applying the loose limit.
+      const gs = Number(p.groundspeed || 0);
+      const limitGs = LINEUP_GS_MAX_KTS + 14; 
+      if(!isFinite(gs) || gs > limitGs) return null;	  
 
     // 1. HOT ZONE LOGIC (Pre-Calculated Lineup Segments)
     // This handles long taxiways and complex intersections correctly.
@@ -5416,6 +5559,9 @@ out geom tags;
       };
       const tgt = getRunwayTargetForFlight(f, rIdx, globalActiveRunways[icao]);
       if(!tgt) return null;
+	  
+      // Check Standard Speed Limit unless we have strong "Just Merged" signal
+      if (!tgt.rwJustMergedOntoAxis && gs > LINEUP_GS_MAX_KTS) return null;	  
 
       // Must be tightly on runway axis.
       // NOTE: Do NOT rely on f.rwOnAxisTight here (it intentionally excludes runway ends via proj.t > 0.03),
@@ -5557,6 +5703,13 @@ out geom tags;
     else if(arrAp && dArr != null && dArr < 15) groundRef = arrAp.elevation;
 
     const isGroundAlt = groundRef > 0 ? (alt < (groundRef + 350)) : (alt < 1500);
+	
+    // Pre-calc runway context if detecting departure (needed for Takeoff Rwy detection)
+    let rwCtx = null;
+    if(boardType === 'dep' && focusIcao && dep === focusIcao && runwayIndexByIcao.has(focusIcao)){
+        rwCtx = getRunwayTargetForFlight({ cid: String(p.cid), pilot: p, fp }, runwayIndexByIcao.get(focusIcao), globalActiveRunways[focusIcao]);
+    }	
+	
     // Robust on-ground detection:
     let onGround = (gs < 45 && isGroundAlt);
     if(isGroundAlt){
@@ -5781,16 +5934,6 @@ else if(onGround && surfaceDep){
         const fromTaxiRecently =
           tm && tm.lastTaxiTs && (nowT - tm.lastTaxiTs) <= TAKEOFF_FROM_TAXI_GRACE_MS &&
           tm.taxiSince && (nowT - tm.taxiSince) >= TAKEOFF_TAXI_MIN_MS;
-        // New: High-Speed Takeoff Logic
-        let rwCtx = null;
-        if(focusIcao && dep === focusIcao){
-          const rIdx = runwayIndexByIcao.get(focusIcao);
-          if(rIdx) {
-            const tmp = { cid: String(p.cid), pilot: p, fp };
-            getRunwayTargetForFlight(tmp, rIdx, globalActiveRunways[focusIcao]); // populates tmp with rw... props
-            rwCtx = tmp;
-          }
-        }
 
         // If > 60kts on runway -> TAKEOFF.
         const onRunwayStrong = !!(rwCtx && (rwCtx.rwOnAxisStrict || rwCtx.rwRollingOnAxis));
@@ -5824,7 +5967,20 @@ else if(onGround && surfaceDep){
         const held = isTakeoffHeld(p.cid);
         if(takeoffOk || prevTaxiRecently || held){
           if(takeoffOk || prevTaxiRecently) markTakeoff(p.cid);
-          cand = { phase:"TAKEOFF", rank:1, text: statusTxt("takeoff"), cls:"warn", finished:false };
+          // Try to determine the specific runway for the status text
+          // 1. Live position on runway axis?
+          // 2. Previously detected lineup?
+          let rwyName = null;
+          if(rwCtx && (rwCtx.rwOnAxisStrict || rwCtx.rwRollingOnAxis) && rwCtx.designator){
+              rwyName = rwCtx.designator;
+          }
+          if(!rwyName && isTakeoffHeld(p.cid)){
+             const memRwy = getLineupHeld(p.cid); // might retrieve from memory
+             if(memRwy && memRwy !== true) rwyName = memRwy;
+          }
+
+          const txt = rwyName ? statusTxt("takeoff_rwy", { rwy: normalizeRunwayDesignator(rwyName) }) : statusTxt("takeoff");
+          cand = { phase:"TAKEOFF", rank:1, text: txt, cls:"warn", finished:false };
         }else{
           // IMPORTANT: avoid "—" between TAXI -> (TAKEOFF/DEPARTING). This branch is hit first,
           // so we must set a sensible fallback status when the takeoff heuristic doesn't trigger.
@@ -6080,9 +6236,37 @@ else if(onGround && surfaceDep){
       // Map early departure phases to DEPAREA so computeDynamicEtaTs uses a sensible factor.
       const etaPhase = (phase === "DEPARTING" || phase === "CLIMB") ? "DEPAREA" : phase;
       cand = computeDynamicEtaTs(f.pilot, destAp, etaPhase);
-      if(isFinite(cand) && isFinite(f.etaPlannedTs) && Math.abs(f.etaPlannedTs - cand) < 4*3600*1000){
-        cand = cand*0.70 + f.etaPlannedTs*0.30;
-      }else if(!isFinite(cand)){
+      
+      // --- NEW INTELLIGENT BLENDING ALGORITHM ---
+      // Problem: Immediately after takeoff (climb), Groundspeed is low, resulting in absurdly late ETAs.
+      // Solution: Blend 'Live Physics ETA' with 'Plan-Relative ETA' based on flight progress.
+      if(isFinite(cand) && f.fp?.enroute_time){
+         const distFlown = f.dFromFocusNm || 0;
+         const distRem = f.dToPlanNm || 0;
+         const totalDist = distFlown + distRem;
+         
+         // Calculate Progress (0.0 to 1.0)
+         const progress = (totalDist > 5) ? (distFlown / totalDist) : 0;
+         
+         // Calculate "Plan-Relative ETA": Now + (TotalPlanTime * RemainingPercentage)
+         // This is robust against delays because it calculates relative to "Now" and distance left.
+         const durMin = parseDurationHHMM(f.fp.enroute_time);
+         if(durMin){
+             const remainingPlanMs = (durMin * 60000) * (1.0 - progress);
+             const planEta = now + remainingPlanMs;
+
+             // Weighting: Trust Plan heavily at start (progress < 20%), then fade to Live.
+             // Cubic curve for smooth transition.
+             let weight = (progress < 0.20) ? Math.pow(1.0 - (progress / 0.20), 3) : 0;
+
+             // VFR/Low-Slow Guard: If Live & Plan match closely (<15m diff), trust Live more (don't force Plan).
+             if(Math.abs(cand - planEta) < 15 * 60000) weight *= 0.25;
+
+             cand = (cand * (1 - weight)) + (planEta * weight);
+         }
+      }
+      // Fallback if physics failed completely
+      if(!isFinite(cand)){
         cand = f.etaPlannedTs ?? null;
       }
       if(isFinite(cand) && cand < (now - 2*60*1000)) cand = now + 2*60*1000;
@@ -6391,7 +6575,19 @@ else if(onGround && surfaceDep){
       }
 
       if(c.altgs){
-        c.altgs.textContent = altGsText(f.pilot);
+		  
+//		Kept for Debugging
+//      c.altgs.textContent = altGsText(f.pilot);		  
+
+        // Hide Alt/GS for flights on ground (Gate, Taxi, Lineup) to reduce clutter.
+        // Keep it for TAKEOFF to show acceleration.
+        const ph = f.status?.phase;
+        const hide = (ph === "GATE" || ph === "TAXI" || ph === "PREFILE" || ph === "LINEUP" || f.status?.finished);
+        if(hide){
+            c.altgs.innerHTML = '<span class="muted" style="opacity:0.3">—</span>';
+        } else {
+            c.altgs.textContent = altGsText(f.pilot);
+        }
       }
 
       if(c.status){
@@ -7185,7 +7381,8 @@ else if(onGround && surfaceDep){
 
   // Fair scheduling (interleaving)
   function requestXpForVisibleFlights(){
-    const max = 45; // Hardcoded limit per cycle to protect API
+	// const max = 45; // Hardcoded limit per cycle to protect API
+    // Limit removed to utilize DB cache fully. RateLimiter still protects external API.	
 
     // Collect candidates from ALL airports (background processing)
     const allCandidates = [];
@@ -7195,7 +7392,10 @@ else if(onGround && surfaceDep){
     }
 
     // Slice to max limit per cycle
-    const targets = allCandidates.slice(0, max);
+    // const targets = allCandidates.slice(0, max);
+    
+	// Process all candidates
+    const targets = allCandidates;	
 
     for(const f of targets){
       applyCachedXpIfAvailable(f);
@@ -7454,6 +7654,8 @@ else if(onGround && surfaceDep){
     memberCache = await loadMemberCache();
     gateFlightCache = await loadGateFlightCache();
     await TaxiTimeManager.load();
+	
+    await loadRexRules(); // WICHTIG: Await, damit Rules VOR der ersten Prediction da sind!	
 
     await ensureAirportIndex();
 
