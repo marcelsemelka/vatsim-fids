@@ -3,6 +3,10 @@
  * VATSIM FIDS - WordPress Authentication Wrapper
  */
 
+define('ENABLE_DEBUG_LOG', false); // Setze auf true, um Debugging zu aktivieren
+define('SHOW_INFO_MODAL', true);  // Modal ein- oder ausschalten
+define('INFO_MODAL_VERSION', 1);
+
 // Versuche wp-load.php zu finden (Aktueller Ordner, Elternordner oder Document Root)
 $possible_paths = [
     __DIR__ . '/wp-load.php',
@@ -17,6 +21,36 @@ foreach ($possible_paths as $path) {
         break;
     }
 }
+// DEBUG LOG HANDLER
+if (isset($_POST['action']) && $_POST['action'] === 'save_debug') {
+    // JSON Header für saubere Rückgabe
+    header('Content-Type: application/json');
+
+    // SICHERHEITS-CHECK: Ist Debugging im Code deaktiviert?
+    if (defined('ENABLE_DEBUG_LOG') && ENABLE_DEBUG_LOG !== true) {
+        echo json_encode(['status' => 'forbidden', 'msg' => 'Debugging is disabled by server configuration.']);
+        exit;
+    }
+
+    $file = __DIR__ . '/vatsim_debug_log.json';
+    // Prüfung ob Datei beschreibbar ist
+    if (!is_writable($file) && !is_writable(__DIR__)) {
+        echo json_encode(['status' => 'error', 'msg' => 'Permission denied. Please create vatsim_debug_log.json manually and CHMOD to 666.']);
+        exit;
+    }
+
+    $dataRaw = $_POST['data'] ?? '[]';
+    $entry = json_encode(['saved_at' => date('c'), 'payload' => json_decode($dataRaw)]) . "\n";
+
+    $result = file_put_contents($file, $entry, FILE_APPEND);
+
+    if ($result === false) {
+        echo json_encode(['status' => 'error', 'msg' => 'Write failed (Disk full?)']);
+    } else {
+        echo json_encode(['status' => 'ok', 'bytes' => $result]);
+    }
+    exit;
+}
 ?>
 <!doctype html>
 <html lang="de">
@@ -29,7 +63,7 @@ foreach ($possible_paths as $path) {
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
 
-  <style>
+ <style>
     :root {
       --bg-root: #0f1115;
       --bg-gradient: radial-gradient(circle at 50% 0%, #1e293b 0%, #0f1115 60%);
@@ -46,6 +80,7 @@ foreach ($possible_paths as $path) {
       --font-mono: 'JetBrains Mono', monospace;
     }
 
+    /* --- BASIS --- */
     * { box-sizing: border-box; }
     body { margin: 0; background-color: var(--bg-root); background-image: var(--bg-gradient); background-attachment: fixed; color: var(--text-main); font-family: var(--font-ui); padding-bottom: 60px; min-height: 100vh; -webkit-font-smoothing: antialiased; }
     ::-webkit-scrollbar { width: 8px; height: 8px; }
@@ -53,20 +88,47 @@ foreach ($possible_paths as $path) {
     ::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.15); border-radius: 4px; }
     ::-webkit-scrollbar-thumb:hover { background: rgba(255,255,255,0.25); }
 
+    /* --- LAYOUT HEADER --- */
     header { position: sticky; top: 0; z-index: 50; background: rgba(15, 17, 21, 0.85); border-bottom: 1px solid var(--glass-border); backdrop-filter: blur(16px); box-shadow: 0 4px 20px rgba(0,0,0,0.2); }
     .wrap { max-width: 1600px; margin: 0 auto; padding: 12px 20px; }
-    .topbar { display: grid; grid-template-columns: 1fr auto 1fr; align-items: center; gap: 10px; }
-    @media (max-width: 900px) {
-       .topbar { display: flex; flex-direction: column; gap: 16px; }
-    }
+    .topbar { display: grid; grid-template-columns: 1fr auto 1fr; align-items: center; gap: 15px; }
+
     .brand { display: flex; flex-direction: column; }
     .brand h1 { margin: 0; font-size: 20px; font-weight: 700; letter-spacing: -0.02em; background: linear-gradient(90deg, #fff, #94a3b8); -webkit-background-clip: text; -webkit-text-fill-color: transparent; }
     .brand .sub { font-size: 11px; color: var(--text-muted); font-family: var(--font-mono); text-transform: uppercase; letter-spacing: 0.05em; margin-top: 2px; }
 
+    #utcClockMobile { display: none; } /* Default Desktop */
 
-    .controls { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; justify-content: flex-end; }
+    /* --- SIDEBAR & MOBILE --- */
+    .mobile-sidebar { position: fixed; right: -320px; top: 0; width: 300px; height: 100%; background: #111418; z-index: 3000; transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1); padding: 25px; box-shadow: -10px 0 30px rgba(0,0,0,0.7); border-left: 1px solid var(--glass-border); overflow-y: auto; visibility: hidden; }
+    .mobile-sidebar.open { transform: translateX(-320px); visibility: visible; }
+    .sidebar-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.8); z-index: 2999; display: none; backdrop-filter: blur(4px); animation: fadeIn 0.2s; }
+    .sidebar-overlay.open { display: block; }
+    .sidebar-section { margin-bottom: 30px; }
+    .sidebar-section h4 { font-size: 11px; text-transform: uppercase; color: var(--primary); margin-bottom: 15px; border-bottom: 1px solid var(--glass-border); padding-bottom: 5px; opacity: 0.8; }
+    .sidebar-close { position: absolute; top: 15px; right: 15px; background: none; border: none; font-size: 24px; color: var(--text-muted); cursor: pointer; padding: 5px; }
 
-    /* App Fullscreen (Visual Stretch) */
+    #mobileMenuBtn { display: none; font-size: 16px; background: var(--primary-dim); color: var(--primary); border: 1px solid var(--primary); border-radius: 6px; cursor: pointer; flex-shrink: 0; }
+
+    /* --- MOBILE OPTIMIERUNGEN (Zusammengefasst) --- */
+    @media (max-width: 900px) {
+        .topbar { grid-template-columns: auto minmax(50px, 1fr) auto; gap: 10px; padding: 8px 0; }
+        .brand .sub, #runwayContainer, .controls button:not(#mobileMenuBtn), #utcPill { display: none !important; }
+        .brand h1 { font-size: 16px; }
+        #utcClockMobile {
+            display: block; font-family: var(--font-mono); font-size: 12px; color: var(--primary); font-weight: 700; margin-top: -2px;
+        }
+        .airportTabs { transform: scale(0.8); justify-self: center; flex-shrink: 1; min-width: 0; }
+        .controls { justify-content: flex-end; gap: 6px; flex-shrink: 0; display: flex; align-items: center; }
+        .pill.clockPill { padding: 4px 8px; border: none; background: transparent; }
+        .pill.clockPill .dot, .pill.clockPill span:not(#utcClock) { display: none; }
+        .legendInner > *:not(.statusGroup) { display: none !important; }
+        .statusGroup { margin: 0 auto; width: 100%; justify-content: center; }
+        body.sidebar-open { overflow: hidden; }
+        #mobileMenuBtn { display: flex; align-items: center; justify-content: center; width: 30px; height: 30px; }
+    }
+
+    /* --- FULLSCREEN APP --- */
     body.app-full { overflow: hidden; }
     body.app-full header { position: fixed; width: 100%; top: 0; }
     body.app-full main { padding-top: 80px; }
@@ -76,22 +138,29 @@ foreach ($possible_paths as $path) {
     body.app-full .board { min-height: 0; flex: 1; }
     body.app-full footer { position: fixed; bottom: 0; width: 100%; }
 
+    /* --- UI ELEMENTS (Header) --- */
+    .controls { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; justify-content: flex-end; }
 
-    /* New Tabs UI in Header */
     .airportTabs { display: flex; background: rgba(0,0,0,0.3); border: 1px solid var(--glass-border); border-radius: 8px; padding: 2px; gap: 2px; }
     .airportTab { border: none; background: transparent; color: var(--text-muted); padding: 6px 12px; font-size: 13px; font-weight: 700; border-radius: 6px; cursor: pointer; transition: all 0.2s; font-family: var(--font-mono); text-transform: uppercase; }
     .airportTab:hover { background: rgba(255,255,255,0.05); color: #fff; }
     .airportTab.active { background: var(--primary-dim); color: var(--primary); box-shadow: 0 0 0 1px rgba(59, 130, 246, 0.2); }
     .airportTab:disabled { opacity: 0.3; cursor: default; background: transparent; box-shadow: none; color: var(--text-muted); }
 
+    /* --- FORMS & INPUTS --- */
     label { font-size: 11px; font-weight: 600; color: var(--text-muted); text-transform: uppercase; }
     input, select, button { background: rgba(0,0,0,0.3); color: var(--text-main); border: 1px solid var(--glass-border); border-radius: 8px; padding: 8px 12px; font-size: 13px; outline: none; font-family: var(--font-ui); transition: all 0.2s ease; }
     input:focus, select:focus { border-color: var(--primary); box-shadow: 0 0 0 2px var(--primary-dim); background: rgba(0,0,0,0.5); }
+    /* Global Input style (Header use-case primarily) */
     input { font-family: var(--font-mono); text-transform: uppercase; font-weight: 600; letter-spacing: 0.05em; width: 80px; text-align: center; }
+
     button { cursor: pointer; font-weight: 600; background: rgba(255,255,255,0.03); }
     button:hover { background: rgba(255,255,255,0.08); border-color: rgba(255,255,255,0.2); }
     button:active { transform: translateY(1px); }
+    button.debug-active { border-color: #ef4444; color: #ef4444; background: rgba(239, 68, 68, 0.1); animation: pulseRed 2s infinite; }
+    @keyframes pulseRed { 0% { box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.4); } 70% { box-shadow: 0 0 0 6px rgba(239, 68, 68, 0); } 100% { box-shadow: 0 0 0 0 rgba(239, 68, 68, 0); } }
 
+    /* --- CLOCK PILL --- */
     .pill { font-family: var(--font-mono); font-size: 11px; padding: 6px 12px; border-radius: 6px; border: 1px solid var(--glass-border); background: rgba(0,0,0,0.2); color: var(--text-muted); display: inline-flex; gap: 8px; align-items: center; white-space: nowrap; }
     .pill.clockPill { background: rgba(14, 165, 233, 0.08); border-color: rgba(14, 165, 233, 0.2); color: #bae6fd; }
     #utcClock { font-weight: 700; color: #fff; letter-spacing: 0.05em; font-size: 1.25em; }
@@ -101,6 +170,7 @@ foreach ($possible_paths as $path) {
     .dot.bad { background: var(--bad); box-shadow: 0 0 6px var(--bad); }
     .dot.info { background: var(--info); box-shadow: 0 0 6px var(--info); }
 
+    /* --- BOARD & GRID --- */
     main .wrap { padding-top: 24px; padding-bottom: 40px; }
     .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 24px; }
     @media (max-width: 1100px) { .grid { grid-template-columns: 1fr; } }
@@ -109,79 +179,83 @@ foreach ($possible_paths as $path) {
     .boardHeader { display: flex; align-items: center; justify-content: space-between; padding: 16px 20px; border-bottom: 1px solid var(--glass-border); background: rgba(255,255,255,0.02); }
     .boardHeader h2 { margin: 0; font-size: 14px; letter-spacing: 0.1em; text-transform: uppercase; font-weight: 700; color: var(--text-main); display: flex; align-items: center; gap: 8px; }
     .boardHeader h2::before { content:''; display:block; width:4px; height:16px; background:var(--primary); border-radius:2px; }
-        .boardHeader .mini { display: flex; gap: 8px; align-items: center; }
+    .boardHeader .mini { display: flex; gap: 8px; align-items: center; }
 
+    /* --- RUNWAY & METAR --- */
+    .runwayBox { display: flex; flex-direction: column; justify-content: center; margin-left: 20px; padding-left: 20px; border-left: 1px solid var(--glass-border); height: 42px; }
+    .runwayRow { display: flex; align-items: center; gap: 16px; font-size: 20px; }
+    .runwayGlobal { display: flex; align-items: center; gap: 16px; border: none; margin: 0; padding: 0; height: auto; cursor: help; } /* Combined Definition */
 
-    /* Global Runway Display in Header (Left Side) */
-    .runwayGlobal { display: flex; font-size: 20px; cursor: help; align-items: center; gap: 16px; margin-left: 20px; padding-left: 20px; border-left: 1px solid var(--glass-border); height: 32px; }
     .runwayGroup { display: flex; align-items: center; gap: 6px; font-family: var(--font-mono); font-size: 11px; color: var(--text-muted); }
     .runwayGroup .lbl { font-weight: 600; letter-spacing: 0.05em; text-transform: uppercase; font-size: 10px; opacity: 0.7; }
     .runwayGroup .val { font-weight: 700; color: #fff; background: rgba(255,255,255,0.05); padding: 2px 6px; border-radius: 4px; border: 1px solid rgba(255,255,255,0.1); }
     .runwayGlobal.pred .val { color: var(--warn); border-color: rgba(245, 158, 11, 0.3); background: rgba(245, 158, 11, 0.1); }
     .runwayGlobal.atis .val { color: #fff; border-color: rgba(59, 130, 246, 0.4); background: rgba(59, 130, 246, 0.15); }
 
-
+    .metarRow { margin-top: 2px; white-space: nowrap; overflow: hidden; max-width: 300px; font-family: var(--font-mono); font-size: 10px; color: var(--text-muted); opacity: 0.6; letter-spacing: 0.03em; cursor: help; -webkit-mask-image: linear-gradient(to right, #000 85%, transparent 100%); mask-image: linear-gradient(to right, #000 85%, transparent 100%); }
+    .metarRow:hover { opacity: 1; color: #fff; }
     .hint { font-size: 11px; color: var(--text-muted); font-weight: 500; }
 
-    table { width: 100%; border-collapse: collapse; font-family: var(--font-mono); font-size: 12px; table-layout: fixed; }
-
-    thead th {
-      text-align: left; color: var(--text-muted); font-weight: 600; font-size: 11px; text-transform: uppercase; letter-spacing: 0.05em;
-      padding: 12px 16px; border-bottom: 1px solid var(--glass-border); background: rgba(15, 17, 21, 0.95); position: sticky; top: 0; z-index: 10; backdrop-filter: blur(10px);
-    }
-
+/* --- TABLE STYLING --- */
+    table { width: 100%; border-collapse: collapse; font-family: var(--font-mono); font-size: 12px; table-layout: auto; }
+    thead th { text-align: left; color: var(--text-muted); font-weight: 600; font-size: 11px; text-transform: uppercase; letter-spacing: 0.05em; padding: 12px 8px; border-bottom: 1px solid var(--glass-border); background: rgba(15, 17, 21, 0.95); position: sticky; top: 0; z-index: 10; backdrop-filter: blur(10px); }
     tbody tr { transition: background 0.15s, transform 0.3s cubic-bezier(0.2, 0.8, 0.2, 1); will-change: transform, opacity; border-bottom: 1px solid rgba(255,255,255,0.03); }
     tbody tr:last-child { border-bottom: none; }
     tbody tr:hover { background: var(--glass-highlight); }
+    tbody td { padding: 10px 8px; vertical-align: middle; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; color: var(--text-main); }
 
-    tbody td {
-      padding: 10px 16px; vertical-align: middle; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; color: var(--text-main);
-    }
-
-    .cell-route { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; cursor: help; }
-	
-    /* Responsive Route Column: Type stays, Route shrinks */
-    .cell-route { display: flex; align-items: center; white-space: nowrap; overflow: hidden; cursor: help; }
-    /* 1. Aircraft Type: Fix, never shrink */
-    .cell-route > span:first-child { flex: 0 0 auto; margin-right: 5px; font-weight: 700; }
-    /* 2. Separator: Fix */
-    .cell-route > span:nth-child(2) { flex: 0 0 auto; }
-    /* 3. Route: Shrinkable, truncate with ellipsis */
-    .cell-route > span:last-child { flex: 0 1 auto; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
-	
-    /* RESPONSIVE LOGIC: Hide Route on small screens / heavy zoom */
-    /* Adjust 1300px based on when you feel it gets too cramped */
-    @media (max-width: 1300px) {
-        /* Hide the separator and the route text */
-        .cell-route > span:nth-child(2),
-        .cell-route > span:last-child { display: none !important; }
-        
-        /* Hide the "/ Route" part in the table header */
-        th .opt-route { display: none !important; }
-        
-        /* Ensure the column doesn't collapse completely */
-        .cell-route { min-width: 50px; } 
-    }
-
-    .cell-route .muted { opacity: 0.6; font-size: 11px; }
-
-    tbody tr.removing { opacity: 0; transform: scale(0.98) translateY(-10px); pointer-events: none; }
-    tbody tr.adding { opacity: 0; transform: translateY(10px); }
-    tbody tr.finishedRow,
-    tbody tr.groundRow { opacity: 0.5; filter: grayscale(0.6); }
-    tbody tr.finishedRow:hover,
-    tbody tr.groundRow:hover { opacity: 0.8; }
-
-    /* Arrivals: subtle separator above the landed block */
-    tbody tr.landedDivider {
-      border-top: 3px solid rgba(255,255,255,0.10);
-    }
-
+    td.right { padding-right: 16px !important; }
+    td:nth-last-child(2), th:nth-last-child(2) { width: 1px; min-width: 150px; } /* Status Spalte Protection */
     .right { text-align: right; }
     .center { text-align: center; }
     .muted { color: var(--text-muted); }
 
-    .badge { display: inline-flex; align-items: center; gap: 6px; padding: 4px 10px; border-radius: 99px; font-size: 11px; font-weight: 600; letter-spacing: 0.02em; border: 1px solid transparent; transition: all 0.3s ease; }
+        /* Spalten-Definitionen */
+        /* Links klebend */
+        th:nth-child(1), td:nth-child(1) { width: 65px; text-align: center; } /* Zeit */
+        th:nth-child(2), td:nth-child(2) { width: 90px; } /* Callsign */
+        th:nth-child(3), td:nth-child(3) { width: 50px; } /* ICAO (Von/Nach) */
+
+        /* Mitte: Flexibel */
+        th:nth-child(4), td:nth-child(4) { width: auto; } /* Type/Route nimmt den Rest */
+
+        /* Rechts klebend */
+        th:nth-child(5), td:nth-child(5) { width: 65px; text-align: right; } /* ALT/GS */
+        th:nth-child(6), td:nth-child(6) { width: 160px; text-align: left; } /* Status */
+        th:nth-child(7), td:nth-child(7) { width: 75px; text-align: right; } /* XP */
+
+        /* Zellen-Inhalte ausrichten */
+        td.right { padding-right: 12px !important; }
+
+        /* Route-Spalte Logik (Breite begrenzen damit Text-Overflow funktioniert) */
+        .cell-route {
+
+                max-width: 0; /* Erlaubt der Zelle zu schrumpfen und Text abzuschneiden */
+                width: 100%;
+color: var(--text-muted);
+        opacity: 0.5;
+        font-size: 11px;
+
+        /* Der Fade-Out Effekt nach rechts */
+        -webkit-mask-image: linear-gradient(to right, #000 60%, transparent 95%);
+        mask-image: linear-gradient(to right, #000 60%, transparent 95%);
+        }
+
+    /* Stacked ALT/GS Cell */
+    .cell-stacked { display: flex; flex-direction: column; align-items: flex-end; justify-content: center; line-height: 1.2; }
+    .cell-stacked .topVal { font-weight: 700; color: #fff; font-size: 12px; }
+    .cell-stacked .botVal { font-weight: 500; color: var(--text-muted); font-size: 11px; opacity: 0.8; }
+
+    /* Row States */
+    tbody tr.removing { opacity: 0; transform: scale(0.98) translateY(-10px); pointer-events: none; }
+    tbody tr.adding { opacity: 0; transform: translateY(10px); }
+    tbody tr.finishedRow, tbody tr.groundRow { opacity: 0.5; filter: grayscale(0.6); }
+    tbody tr.finishedRow:hover, tbody tr.groundRow:hover { opacity: 0.8; }
+    tbody tr.landedDivider { border-top: 3px solid rgba(255,255,255,0.10); }
+
+    /* --- BADGES & PILLS --- */
+    .badge { display: inline-flex; align-items: center; gap: 6px; padding: 4px 10px; border-radius: 99px; font-size: 11px; font-weight: 600; letter-spacing: 0.02em; border: 1px solid transparent; transition: all 0.3s ease; white-space: nowrap; max-width: 100%; overflow: hidden; text-overflow: ellipsis; }
+    .badge span:not(.sDot) { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
     .badge .sDot { width: 6px; height: 6px; border-radius: 50%; background: currentColor; opacity: 0.8; }
     .badge.good { background: var(--good-bg); color: var(--good); border-color: rgba(16, 185, 129, 0.2); }
     .badge.warn { background: var(--warn-bg); color: var(--warn); border-color: rgba(245, 158, 11, 0.2); }
@@ -189,6 +263,9 @@ foreach ($possible_paths as $path) {
     .badge.info { background: var(--info-bg); color: var(--info); border-color: rgba(14, 165, 233, 0.2); }
     .badge.blink { animation: pulseGlow 1.5s infinite; }
     @keyframes pulseGlow { 0% { box-shadow: 0 0 0 0 rgba(255,255,255,0.1); } 70% { box-shadow: 0 0 0 6px rgba(255,255,255,0); } 100% { box-shadow: 0 0 0 0 rgba(255,255,255,0); } }
+
+    .status-wrapper { display: flex; align-items: center; gap: 6px; }
+    .detail-pill { font-family: var(--font-mono); font-size: 10px; color: #94a3b8; background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.1); padding: 3px 6px; border-radius: 4px; white-space: nowrap; }
 
     .xpPill { display: inline-flex; align-items: center; gap: 6px; padding: 3px 8px; border-radius: 6px; font-size: 11px; font-weight: 600; border: 1px solid rgba(255,255,255,0.1); background: rgba(0,0,0,0.2); cursor: help; user-select: none; transition: 0.2s; }
     .xpPill:hover { background: rgba(255,255,255,0.05); border-color: rgba(255,255,255,0.2); }
@@ -202,81 +279,46 @@ foreach ($possible_paths as $path) {
     .xpPill.loading { opacity: 0.6; cursor: wait; }
     .xpPill .spinner { width: 10px; height: 10px; border-radius: 50%; border: 2px solid rgba(255,255,255,0.1); border-top-color: #fff; animation: spin 0.8s linear infinite; }
     @keyframes spin { to{ transform: rotate(360deg); } }
-
     .dayPlus { margin-left: 4px; font-size: 10px; color: var(--text-muted); font-family: var(--font-mono); }
 
-    /* Time cell: show current time type (STD/ETD/ETA/ALDT/AIBT) in top-left */
-    td.timeCell {
-      position: relative;
-      padding-top: 18px; /* make room for the small label */
-    }
-        td.timeCell.hasSub { padding-bottom: 16px; } /* room for the optional sub line */
-    td.timeCell .timeKind {
-      position: absolute;
-      top: 4px;
-      left: 6px;
-      font-size: 9px;
-      letter-spacing: 0.08em;
-      text-transform: uppercase;
-      color: var(--text-muted);
-      opacity: 0.75;
-      pointer-events: none;
-      user-select: none;
-    }
+    /* Time Cells */
+    td.timeCell { position: relative; padding-top: 18px; }
+    td.timeCell.hasSub { padding-bottom: 16px; }
+    td.timeCell .timeKind { position: absolute; top: 4px; left: 6px; font-size: 9px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--text-muted); opacity: 0.75; pointer-events: none; user-select: none; }
     td.timeCell .timeKind.blink { animation: blinkSoft 1.3s infinite; }
     td.timeCell .timeVal { display: block; }
     td.timeCell .timeVal.blink { animation: blinkSoft 1.3s infinite; }
-    td.timeCell .timeSub{
-      position: absolute;
-      bottom: 3px;
-      left: 6px;
-      font-size: 9px;
-      letter-spacing: 0.08em;
-      text-transform: uppercase;
-      color: var(--text-muted);
-      opacity: 0.70;
-      pointer-events: none;
-      user-select: none;
-      white-space: nowrap;
-    }
-    td.timeCell .timeSub .subKind{ margin-right: 6px; opacity: 0.85; }
+    td.timeCell .timeSub { position: absolute; bottom: 3px; left: 6px; font-size: 9px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--text-muted); opacity: 0.70; pointer-events: none; user-select: none; white-space: nowrap; }
+    td.timeCell .timeSub .subKind { margin-right: 6px; opacity: 0.85; }
     @keyframes blinkSoft { 0%,100% { opacity: 0.25; } 50% { opacity: 0.95; } }
 
-
+    /* --- TOOLTIPS --- */
     .tooltip { position: fixed; z-index: 100; pointer-events: none; background: rgba(15, 23, 42, 0.95); border: 1px solid rgba(255,255,255,0.1); padding: 12px; border-radius: 8px; box-shadow: 0 10px 30px rgba(0,0,0,0.5); font-family: var(--font-mono); font-size: 14px; line-height: 1.5; color: #e2e8f0; opacity: 0; transform: translate(-50%, -115%) scale(0.95); transition: opacity 0.15s, transform 0.15s; white-space: pre; backdrop-filter: blur(8px); }
     .tooltip.show { opacity: 1; transform: translate(-50%, -115%) scale(1); }
-    /* Tooltip South modifier (Compacter layout for Tabs) */
-    .tooltip.south { transform: translate(-50%, 24px) scale(0.95); padding: 4px 8px; line-height: 2.5; white-space:normal;}
+    .tooltip.south { transform: translate(-50%, 24px) scale(0.95); padding: 4px 8px; line-height: 2.5; white-space:normal; }
     .tooltip.south.show { transform: translate(-50%, 24px) scale(1); }
 
-    .modal.pilotModal{
-      width: min(680px, 100%);
-    }
-    .modalBody.pilotBody{
-      display: flex;
-      flex-direction: column;
-      gap: 16px;
-      padding: 18px 20px;
-      grid-template-columns: none;
-    }
-    @media (max-width: 800px){
-      .modalBody.pilotBody{ padding: 16px; }
-    }
-    /* Hide Pilot History completely (UI + no longer needed visually) */
-    .pilotHistoryCard{
-      display: none !important;
-    }
-
+    /* --- MODALS GENERAL --- */
     .modalOverlay { position: fixed; inset: 0; background: rgba(0,0,0,0.7); backdrop-filter: blur(5px); display: none; align-items: center; justify-content: center; z-index: 200; padding: 20px; animation: fadeIn 0.2s ease-out; }
     @keyframes fadeIn { from{opacity:0;} to{opacity:1;} }
     .modalOverlay.show { display: flex; }
     .modal { width: min(800px, 100%); background: #1e293b; border: 1px solid rgba(255,255,255,0.1); border-radius: 16px; box-shadow: 0 25px 50px -12px rgba(0,0,0,0.5); overflow: hidden; display: flex; flex-direction: column; }
+
+    /* Pilot Modal Specifics */
+    .modal.pilotModal { width: min(680px, 100%); }
+    .modalBody.pilotBody { display: flex; flex-direction: column; gap: 16px; padding: 18px 20px; grid-template-columns: none; }
+    @media (max-width: 800px){ .modalBody.pilotBody{ padding: 16px; } }
+    .pilotHistoryCard { display: none !important; }
+
+    /* Modal Structure */
     .modalHead { padding: 16px 24px; background: rgba(0,0,0,0.2); border-bottom: 1px solid rgba(255,255,255,0.05); display: flex; justify-content: space-between; align-items: center; }
     .modalHead h3 { margin: 0; font-size: 16px; color: #fff; letter-spacing: 0.05em; text-transform: uppercase; }
     .modalHead .close { background: transparent; border: none; font-size: 20px; padding: 4px; color: var(--text-muted); }
     .modalHead .close:hover { color: #fff; background: rgba(255,255,255,0.1); }
     .modalBody { padding: 24px; display: grid; grid-template-columns: 1.2fr 0.8fr; gap: 24px; overflow-y: auto; max-height: 80vh; scrollbar-gutter: stable; }
     @media (max-width: 800px) { .modalBody { grid-template-columns: 1fr; } }
+
+    /* Content Cards */
     .card { background: rgba(0,0,0,0.2); border: 1px solid rgba(255,255,255,0.05); border-radius: 12px; padding: 16px; }
     .card h4 { margin: 0 0 16px 0; font-size: 11px; text-transform: uppercase; letter-spacing: 0.1em; color: var(--text-muted); border-bottom: 1px solid rgba(255,255,255,0.05); padding-bottom: 8px; }
     .kv { display: grid; grid-template-columns: 140px 1fr; gap: 8px; font-family: var(--font-mono); font-size: 13px; }
@@ -285,14 +327,11 @@ foreach ($possible_paths as $path) {
     .list { margin: 0; padding-left: 20px; font-family: var(--font-mono); font-size: 12px; color: var(--text-muted); line-height: 1.6; }
     .list li { margin-bottom: 6px; }
     .linkRow { margin-top: 16px; display: flex; gap: 10px; }
+
     .aBtn { display: inline-flex; align-items: center; padding: 8px 16px; border-radius: 6px; background: var(--primary-dim); color: var(--primary); text-decoration: none; font-size: 12px; font-weight: 600; border: 1px solid rgba(59, 130, 246, 0.2); transition: 0.2s; }
     .aBtn:hover { background: var(--primary); color: #fff; }
 
-    .formGrid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
-    .field { display: flex; flex-direction: column; gap: 6px; }
-    .field input[type="text"], .field input[type="number"], .field select { width: 100%; text-align: left; }
-    .fieldRow { display: flex; flex-wrap: wrap; gap: 12px; font-size: 13px; color: var(--text-muted); align-items: center; }
-    .btnRow { display: flex; justify-content: flex-end; gap: 10px; margin-top: 24px; padding-top: 16px; border-top: 1px solid rgba(255,255,255,0.05); }
+    .btnRow { display: flex; justify-content: flex-end; gap: 10px; margin-top: 24px; padding-top: 16px; margin-right: 12px; margin-bottom: 12px; border-top: 1px solid rgba(255,255,255,0.05); }
     .btnGhost { background: transparent; border: 1px solid transparent; color: var(--text-muted); }
     .btnGhost:hover { color: #fff; background: rgba(255,255,255,0.05); }
     .btnPrimary { background: var(--primary); color: #fff; border-color: transparent; }
@@ -300,88 +339,153 @@ foreach ($possible_paths as $path) {
     .btnDanger { color: var(--bad); background: rgba(239, 68, 68, 0.1); border-color: transparent; }
     .btnDanger:hover { background: var(--bad); color: #fff; }
 
-    /* Config Tabs + Column Layout UI */
-    .tabs { display:flex; gap:8px; padding: 0 2px 14px; margin-bottom: 14px; border-bottom: 1px solid rgba(255,255,255,0.07); flex-wrap:wrap; }
-    .tabBtn { padding: 8px 12px; border-radius: 10px; border: 1px solid rgba(255,255,255,0.08); background: rgba(255,255,255,0.03); color: var(--text-muted); font-weight: 700; font-size: 12px; cursor: pointer; }
-    .tabBtn:hover { color: #fff; border-color: rgba(255,255,255,0.18); background: rgba(255,255,255,0.06); }
-    .tabBtn.active { color: #fff; background: rgba(59,130,246,0.18); border-color: rgba(59,130,246,0.35); }
-    .tabPanel { display:none; }
-    .tabPanel.active { display:block; }
+    /* --- MODERN CONFIG MODAL & UI --- */
+    .modal.cfgModal { width: min(700px, 100%); height: min(760px, 86vh); background: rgba(18, 22, 28, 0.95); backdrop-filter: blur(20px); border: 1px solid rgba(255,255,255,0.08); box-shadow: 0 50px 100px -20px rgba(0,0,0,0.5); }
+    .modal.cfgModal .modalHead { background: transparent; border-bottom: 1px solid rgba(255,255,255,0.06); padding: 20px 24px; }
+    .modal.cfgModal .modalHead h3 { font-size: 15px; font-weight: 600; letter-spacing: 0.02em; color: #fff; }
 
-    /* Config Modal: fixed/stable height (no jumping on tab switch) */
-    .modal.cfgModal{
-      width: min(700px, 100%);
-      height: min(760px, 86vh);
-    }
-    .modalBody.cfgBody{
-      display:block;
-      flex: 1 1 auto;
-      min-height: 0;        /* critical for flex + overflow scrolling */
-      max-height: none;     /* modal controls height now */
-      overflow-y: auto;
-      scrollbar-gutter: stable;
-      overscroll-behavior: contain;
-    }
+    .modalBody.cfgBody { display: flex; flex-direction: column; flex: 1 1 auto; min-height: 0; max-height: none; overflow-y: auto; scrollbar-gutter: stable; overscroll-behavior: contain; }
+    .modalBody.cfgBody .btnRow { margin-top: auto; }
 
-    /* Cache UI */
-    .cacheBar{
-      height: 10px;
-      border-radius: 999px;
-      background: rgba(255,255,255,0.08);
-      border: 1px solid rgba(255,255,255,0.10);
-      overflow: hidden;
-      margin: 12px 0 14px;
+    /* Modern Tabs (Merged from duplicate definitions) */
+    .tabs { display: flex; background: rgba(0,0,0,0.2); padding: 4px; border-radius: 12px; gap: 0; border: 1px solid rgba(255,255,255,0.05); margin-bottom: 14px; flex-wrap: wrap; }
+    .tabBtn { background: transparent; border: none; color: var(--text-muted); padding: 8px 16px; border-radius: 8px; font-weight: 600; flex: 1; transition: all 0.2s; cursor: pointer; font-size: 12px; }
+    .tabBtn:hover { color: #fff; background: rgba(255,255,255,0.03); }
+    .tabBtn.active { background: var(--primary); color: #fff; box-shadow: 0 4px 12px rgba(59, 130, 246, 0.3); }
+    .tabPanel { display: none; }
+    .tabPanel.active { display: block; }
+
+    /* Config Sections & Forms */
+    .cfg-section { display: flex; flex-direction: column; gap: 16px; margin-bottom: 24px; }
+    .cfg-row { display: flex; align-items: center; justify-content: space-between; padding: 12px 16px; background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.04); border-radius: 10px; transition: background 0.2s; }
+    .cfg-row:hover { background: rgba(255,255,255,0.05); border-color: rgba(255,255,255,0.08); }
+    .cfg-row label { margin: 0; font-size: 13px; font-weight: 500; color: #e2e8f0; text-transform: none; letter-spacing: 0; cursor: pointer; }
+    .cfg-row .sub { display: block; font-size: 11px; color: var(--text-muted); margin-top: 2px; }
+
+    .cfg-grid-3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 8px; }
+    .cfg-grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+
+    /* Info Modal Styles */
+    .modal.infoModal { width: min(500px, 100%); }
+    .info-body { line-height: 1.6; color: var(--text-main); }
+    .info-body p { margin-bottom: 15px; }
+    .info-footer {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-top: 20px;
+      padding-top: 15px;
+      border-top: 1px solid rgba(255,255,255,0.05);
     }
-    .cacheBarFill{
-      height: 100%;
-      width: 0%;
-      background: linear-gradient(90deg, rgba(59,130,246,0.9), rgba(16,185,129,0.9));
-      transition: width 0.25s ease;
-    }
-    .cacheList{ display:flex; flex-direction:column; gap:8px; margin-top: 10px; }
-    .cacheRow{
-      display:flex; align-items:center; justify-content:space-between; gap:12px;
-      padding: 10px 12px;
-      border-radius: 12px;
-      border: 1px solid rgba(255,255,255,0.08);
-      background: rgba(0,0,0,0.16);
-      font-family: var(--font-mono);
-      font-size: 12px;
-    }
-    .cacheRow .k{ flex: 1; min-width: 0; color:#e2e8f0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
-    .cacheRow .v{ flex: 0 0 auto; color: var(--text-muted); }
+    .dont-show-label { display: flex; align-items: center; gap: 8px; cursor: pointer; text-transform: none; font-weight: 400; color: var(--text-muted); }
+    .dont-show-label input { width: auto; cursor: pointer; }
+
+
+    /* Modern Inputs */
+    .cfg-input { background: rgba(0,0,0,0.3); border: 1px solid rgba(255,255,255,0.1); color: #fff; padding: 8px 12px; border-radius: 6px; font-family: var(--font-mono); font-size: 13px; text-align: right; width: 120px; transition: 0.2s; }
+    .cfg-input:focus { border-color: var(--primary); box-shadow: 0 0 0 3px var(--primary-dim); outline: none; background: rgba(0,0,0,0.5); }
+    .cfg-select { appearance: none; background-color: rgba(0,0,0,0.3); background-image: url("data:image/svg+xml;charset=US-ASCII,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%22292.4%22%20height%3D%22292.4%22%3E%3Cpath%20fill%3D%22%2394a3b8%22%20d%3D%22M287%2069.4a17.6%2017.6%200%200%200-13-5.4H18.4c-5%200-9.3%201.8-12.9%205.4A17.6%2017.6%200%200%200%200%2082.2c0%205%201.8%209.3%205.4%2012.9l128%20127.9c3.6%203.6%207.8%205.4%2012.8%205.4s9.2-1.8%2012.8-5.4L287%2095c3.5-3.5%205.4-7.8%205.4-12.8%200-5-1.9-9.2-5.5-12.8z%22%2F%3E%3C%2Fsvg%3E"); background-repeat: no-repeat; background-position: right 10px top 50%; background-size: 10px auto; padding-right: 30px; }
+
+    /* Toggle Switch */
+    .toggle { position: relative; display: inline-block; width: 44px; height: 24px; flex-shrink: 0; }
+    .toggle input { opacity: 0; width: 0; height: 0; }
+    .slider { position: absolute; cursor: pointer; top: 0; left: 0; right: 0; bottom: 0; background-color: rgba(255,255,255,0.1); transition: .3s; border-radius: 34px; border: 1px solid rgba(255,255,255,0.1); }
+    .slider:before { position: absolute; content: ""; height: 18px; width: 18px; left: 2px; bottom: 2px; background-color: #94a3b8; transition: .3s; border-radius: 50%; box-shadow: 0 2px 4px rgba(0,0,0,0.3); }
+    input:checked + .slider { background-color: var(--primary-dim); border-color: var(--primary); }
+    input:checked + .slider:before { transform: translateX(20px); background-color: var(--primary); }
+    input:focus + .slider { box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.2); }
+
+    /* Cache & Column Lists */
+    .cacheBar { height: 10px; border-radius: 999px; background: rgba(255,255,255,0.08); border: 1px solid rgba(255,255,255,0.10); overflow: hidden; margin: 12px 0 14px; }
+    .cacheBarFill { height: 100%; width: 0%; background: linear-gradient(90deg, rgba(59,130,246,0.9), rgba(16,185,129,0.9)); transition: width 0.25s ease; }
+    .cacheList { display: flex; flex-direction: column; gap: 8px; margin-top: 10px; }
+    .cacheRow { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 10px 12px; border-radius: 12px; border: 1px solid rgba(255,255,255,0.08); background: rgba(0,0,0,0.16); font-family: var(--font-mono); font-size: 12px; }
+    .cacheRow .k { flex: 1; min-width: 0; color:#e2e8f0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .cacheRow .v { flex: 0 0 auto; color: var(--text-muted); }
 
     .colHelp { font-size: 12px; color: var(--text-muted); margin-bottom: 10px; }
-    .colList { display:flex; flex-direction:column; gap:8px; }
-    .colItem { display:flex; align-items:center; gap:10px; padding: 10px 12px; border-radius: 12px; border: 1px solid rgba(255,255,255,0.08); background: rgba(0,0,0,0.16); }
-    .colItem .name { flex:1; font-family: var(--font-mono); font-size: 12px; color:#e2e8f0; }
-    .colItem .miniBtns { display:flex; gap:6px; }
-    .colItem .miniBtns button { padding: 6px 10px; border-radius: 10px; font-family: var(--font-mono); }
+    .colList { display: flex; flex-direction: column; gap: 6px; }
+    .colItem { display: flex; align-items: center; gap: 12px; padding: 10px 12px; background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.05); border-radius: 8px; }
+    .colItem .name { font-weight: 500; font-size: 13px; color: #f1f5f9; flex: 1; font-family: var(--font-mono); }
+    .colItem .miniBtns { display: flex; gap: 2px; background: rgba(0,0,0,0.3); border-radius: 6px; padding: 2px; }
+    .colItem .miniBtns button { background: transparent; border: none; color: var(--text-muted); width: 24px; height: 24px; padding: 0; display: flex; align-items: center; justify-content: center; border-radius: 4px; font-family: var(--font-mono); }
+    .colItem .miniBtns button:hover:not(:disabled) { background: rgba(255,255,255,0.1); color: #fff; }
+    .colItem .miniBtns button:disabled { opacity: 0.2; cursor: default; }
 
+    /* --- FOOTER LEGEND --- */
     footer.legendBar { position: fixed; bottom: 0; left: 0; right: 0; z-index: 60; background: rgba(15, 17, 21, 0.9); backdrop-filter: blur(12px); border-top: 1px solid var(--glass-border); font-family: var(--font-mono); font-size: 11px; }
     .legendInner { max-width: 1600px; margin: 0 auto; padding: 10px 20px; display: flex; flex-wrap: wrap; gap: 16px; align-items: center; color: var(--text-muted); }
     .legendTitle { font-weight: 700; color: #fff; text-transform: uppercase; letter-spacing: 0.05em; }
     .legendNote { opacity: 0.7; margin-right: auto; }
-
-    /* Status pills in footer */
     .statusGroup { display: flex; gap: 12px; margin-left: auto; align-items: center; }
     .statusGroup .pill { padding: 4px 10px; font-size: 10px; height: 24px; background: rgba(255,255,255,0.03); border-color: rgba(255,255,255,0.1); }
 
-  </style>
+/* --- RESPONSIVE LOGIC (Zoom Levels) --- */
+    /* Stufe 1: Laptops / Zoom */
+    @media (max-width: 1350px) {
+        .cell-route > span:last-child { display: none !important; }
+        .cell-route > span:nth-child(2) { display: none !important; }
+        th .opt-route { display: none !important; }
+        /* Mitte schrumpfen lassen */
+        th:nth-child(4), td:nth-child(4) { width: 50px !important; min-width: 50px; }
+    }
+
+    /* Stufe 2: Tablets / Starker Zoom */
+    @media (max-width: 1100px) {
+        /* ALT/GS (Spalte 5) ausblenden */
+        th:nth-child(5), td:nth-child(5) { display: none !important; }
+    }
+
+    /* Stufe 3: Mobile (Smartphone) - KRITISCH FÜR XP SICHTBARKEIT */
+    @media (max-width: 800px) {
+        /* ICAO Von/Nach (Spalte 3) ausblenden */
+        th:nth-child(3), td:nth-child(3) { display: none !important; }
+
+        /* Status-Spalte schmaler machen, damit XP rechts Platz hat */
+        th:nth-child(6), td:nth-child(6) {
+            width: 100px !important;
+            min-width: 100px !important;
+        }
+
+        /* XP Spalte (Spalte 7) erzwingen */
+        th:nth-child(7), td:nth-child(7) {
+            width: 55px !important;
+            min-width: 55px !important;
+            display: table-cell !important;
+            padding-right: 4px !important;
+        }
+
+        /* Tabelle darf nicht breiter als Wrap sein */
+        table { table-layout: fixed; }
+        .topbar { grid-template-columns: auto 1fr auto; }
+    }
+
+    /* Stufe 4: Sehr kleine Geräte (iPhone SE etc) */
+    @media (max-width: 400px) {
+        /* Wenn es extrem eng wird: Zeige nur Zeit, Callsign, Status, XP */
+        th:nth-child(4), td:nth-child(4) { display: none !important; } /* Mitte weg */
+        th:nth-child(2), td:nth-child(2) { width: 80px !important; }
+    }
+
+</style>
 </head>
 <body>
 
 <header>
+  <div class="sidebar-overlay" id="sidebarOverlay"></div>
   <div class="wrap">
     <div class="topbar">
       <div style="display:flex; align-items:center;">
-      <div style="display:flex; align-items:center;">
         <div class="brand">
           <h1 id="brandTitle">VATSIM FIDS</h1>
-          <div class="sub" id="brandSub">Local Board · V0.8a</div>
+          <div class="sub" id="brandSub"></div>
+                  <div id="utcClockMobile">--:--:--</div>
         </div>
-        <div id="globalRunways" class="runwayGlobal"></div>
-        </div>
+        <div id="runwayContainer" class="runwayBox">
+    <div id="globalRunways" class="runwayGlobal"></div>
+    <div id="globalMetar" class="metarRow" title="Raw METAR"></div>
+                </div>
+
  </div>
         <div class="airportTabs" id="airportTabs"></div>
       <div class="controls">
@@ -394,8 +498,12 @@ foreach ($possible_paths as $path) {
         <div style="height:24px; border-left:1px solid var(--glass-border); margin:0 8px;"></div>
 
                 <button id="fullscreenBtn" title="Anwendung strecken">⛶</button>
+                                <?php if (defined('ENABLE_DEBUG_LOG') && ENABLE_DEBUG_LOG === true): ?>
+        <button id="debugToggleBtn" title="Debug Logging (Start/Stop)">🐞</button>
+    <?php endif; ?>
         <button id="configBtn" title="Einstellungen">⚙</button>
         <button id="refreshBtn" title="Sofort neu laden">↻</button>
+        <div id="mobileMenuBtn">☰</div>
       </div>
       </div>
     </div>
@@ -406,6 +514,23 @@ foreach ($possible_paths as $path) {
     <div id="boardsContainer"></div>
   </div>
 </main>
+
+<div class="sidebar-overlay" id="sidebarOverlay"></div>
+<aside class="mobile-sidebar" id="mobileSidebar">
+  <button class="sidebar-close" id="sidebarCloseBtn">✕</button>
+  <div class="sidebar-section" style="margin-top:20px;">
+    <h4 id="sidebarRwyTitle">Aktive Pisten</h4>
+    <div id="sidebarRunways"></div>
+  </div>
+  <div class="sidebar-section">
+    <h4 id="sidebarMetarTitle">METAR</h4>
+    <div id="sidebarMetar" style="font-family:var(--font-mono); font-size:11px; line-height:1.4; color:var(--text-muted);"></div>
+  </div>
+  <div class="sidebar-section">
+    <h4>Aktionen</h4>
+    <button id="configBtnMobile" style="width:100%; margin-bottom:10px; justify-content:center; display:flex; gap:10px;">⚙ Einstellungen</button>
+  </div>
+</aside>
 
 <template id="airportViewTemplate">
   <div class="grid airport-view" style="display:none;">
@@ -481,6 +606,27 @@ foreach ($possible_paths as $path) {
   </div>
 </div>
 
+<?php if (SHOW_INFO_MODAL): ?>
+<div id="infoModalOverlay" class="modalOverlay" role="dialog" aria-modal="true" data-version="<?php echo INFO_MODAL_VERSION; ?>">  <div class="modal infoModal">
+    <div class="modalHead">
+      <h3 id="infoModalTitle">System Info</h3>
+      <button class="close" id="infoModalCloseTop">✕</button>
+    </div>
+    <div class="modalBody info-body">
+      <div id="infoModalText">
+      </div>
+      <div class="info-footer">
+        <label class="dont-show-label">
+          <input type="checkbox" id="infoDontShowAgain">
+          <span id="infoDontShowText">Nicht erneut anzeigen</span>
+        </label>
+        <button id="infoModalCloseBtn" class="btnPrimary">OK</button>
+      </div>
+    </div>
+  </div>
+</div>
+<?php endif; ?>
+
 <div id="configModalOverlay" class="modalOverlay" role="dialog" aria-modal="true">
   <div class="modal cfgModal">
     <div class="modalHead">
@@ -490,62 +636,56 @@ foreach ($possible_paths as $path) {
 
     <div class="modalBody cfgBody">
       <div class="tabs" role="tablist" aria-label="Config Tabs">
-        <button class="tabBtn active" type="button" data-tab="general" id="cfgTabGeneral">Allgemein</button>
-        <button class="tabBtn" type="button" data-tab="display" id="cfgTabDisplay">Anzeige</button>
-        <button class="tabBtn" type="button" data-tab="xp" id="cfgTabXp">XP Score</button>
-                <button class="tabBtn" type="button" data-tab="cache" id="cfgTabCache">Cache</button>
+        <button class="tabBtn active" type="button" data-tab="general" id="cfgTabGeneral">General</button>
+        <button class="tabBtn" type="button" data-tab="display" id="cfgTabDisplay">Display</button>
+        <button class="tabBtn" type="button" data-tab="xp" id="cfgTabXp">XP / Scoring</button>
+        <button class="tabBtn" type="button" data-tab="cache" id="cfgTabCache">Data Cache</button>
       </div>
 
       <div class="tabPanel active" data-tab="general">
-        <div class="card">
-          <h4 id="cfgGeneralTitle">Allgemeine Konfiguration</h4>
-          <div class="formGrid">
-            <div class="field">
-              <label id="cfgAirportLabel">Airports (Tabs)</label>
-              <div style="display:flex; gap:8px;">
-                <input id="cfgAirport1" type="text" maxlength="4" placeholder="1" />
-                <input id="cfgAirport2" type="text" maxlength="4" placeholder="2" />
-                <input id="cfgAirport3" type="text" maxlength="4" placeholder="3" />
-              </div>
-              <div class="tiny" style="margin-top:4px; color:var(--text-muted);">
-                 Maximal 3 Flughäfen gleichzeitig überwachen.
-              </div>
+        <h4 id="cfgGeneralTitle" style="margin-bottom:16px; color:var(--primary);">Allgemein</h4>
+        <div class="cfg-section">
+            <div class="cfg-row">
+                <div>
+                    <label id="cfgAirportLabel">Airports (ICAO)</label>
+                    <span class="sub">Max. 3 Flughäfen (Tabs)</span>
+                </div>
+                <div class="cfg-grid-3">
+                    <input id="cfgAirport1" class="cfg-input" type="text" maxlength="4" placeholder="EDDB" style="width:70px; text-align:center; font-weight:700; text-transform:uppercase;">
+                    <input id="cfgAirport2" class="cfg-input" type="text" maxlength="4" placeholder="-" style="width:70px; text-align:center; font-weight:700; text-transform:uppercase;">
+                    <input id="cfgAirport3" class="cfg-input" type="text" maxlength="4" placeholder="-" style="width:70px; text-align:center; font-weight:700; text-transform:uppercase;">
+                </div>
             </div>
 
-            <div class="field">
-              <label for="cfgInterval" id="cfgIntervalLabel">Refresh Rate (Sek.)</label>
-              <input id="cfgInterval" type="number" min="15" max="120" step="5" />
+            <div class="cfg-row">
+                <label for="cfgInterval" id="cfgIntervalLabel">Refresh Rate (Sek)</label>
+                <input id="cfgInterval" class="cfg-input" type="number" min="15" max="120" step="5">
             </div>
 
-            <div class="field">
-              <label for="cfgLanguage" id="cfgLanguageLabel">Sprache</label>
-              <select id="cfgLanguage">
-                <option value="de">Deutsch</option>
-                <option value="en">English</option>
-              </select>
+            <div class="cfg-row">
+                <label for="cfgLanguage" id="cfgLanguageLabel">Sprache / Language</label>
+                <select id="cfgLanguage" class="cfg-input cfg-select" style="width:140px;">
+                    <option value="de">Deutsch</option>
+                    <option value="en">English</option>
+                </select>
             </div>
-
-          </div>
         </div>
       </div>
 
       <div class="tabPanel" data-tab="display">
-        <div class="card">
-          <h4 id="cfgDisplayTitle">Anzeige</h4>
+        <div class="cfg-section">
+            <div class="cfg-row"><label for="cfgPrefiles" id="cfgPrefilesText">Prefiles</label><label class="toggle"><input id="cfgPrefiles" type="checkbox"><span class="slider"></span></label></div>
+            <div class="cfg-row"><label for="cfgHideArrLanded" id="cfgHideArrText">Hide Landed</label><label class="toggle"><input id="cfgHideArrLanded" type="checkbox"><span class="slider"></span></label></div>
+            <div class="cfg-row"><label for="cfgHideDepFinished" id="cfgHideDepText">Hide Departed</label><label class="toggle"><input id="cfgHideDepFinished" type="checkbox"><span class="slider"></span></label></div>
+            <div class="cfg-row"><label for="cfgHidePredictive" id="cfgHidePredictiveText">Hide Pred. Rwys</label><label class="toggle"><input id="cfgHidePredictive" type="checkbox"><span class="slider"></span></label></div>
+            <div class="cfg-row"><label for="cfgHideLocal" id="cfgHideLocalText">Hide Local</label><label class="toggle"><input id="cfgHideLocal" type="checkbox"><span class="slider"></span></label></div>
+            <div class="cfg-row"><label for="cfgHideVfr" id="cfgHideVfrText">Hide VFR</label><label class="toggle"><input id="cfgHideVfr" type="checkbox"><span class="slider"></span></label></div>
+        </div>
 
-                 <div class="field" style="margin: 6px 0 14px 0;">
-            <label id="cfgFilterLabel">Filter & Darstellung</label>
-            <div class="fieldRow" style="padding:8px 0;">
-              <label style="display:flex; gap:8px; cursor:pointer;"><input id="cfgPrefiles" type="checkbox" /> <span id="cfgPrefilesText">Prefiles anzeigen</span></label>
-              <label style="display:flex; gap:8px; cursor:pointer;"><input id="cfgHideArrLanded" type="checkbox" /> <span id="cfgHideArrText">Arr: Gelandete ausblenden</span></label>
-              <label style="display:flex; gap:8px; cursor:pointer;"><input id="cfgHideDepFinished" type="checkbox" /> <span id="cfgHideDepText">Dep. Gelandete ausblenden</span></label>
-              <label style="display:flex; gap:8px; cursor:pointer;"><input id="cfgHidePredictive" type="checkbox" /> <span id="cfgHidePredictiveText">Prädiktive Runways ausblenden</span></label>
-              <label style="display:flex; gap:8px; cursor:pointer;"><input id="cfgHideLocal" type="checkbox" /> <span id="cfgHideLocalText">Lokalflüge ausblenden</span></label>
-              <label style="display:flex; gap:8px; cursor:pointer;"><input id="cfgHideVfr" type="checkbox" /> <span id="cfgHideVfrText">VFR ausblenden</span></label>
-                        </div>
-          </div>
- <div class="colHelp" id="cfgDisplayHelp">Spalten ein-/ausblenden und Reihenfolge anpassen (wirkt nach „Speichern“).</div>
-          <div style="display:grid; grid-template-columns: 1fr 1fr; gap:16px;">
+        <h4 id="cfgDisplayTitle" style="margin:24px 0 12px; color:var(--primary);">Spalten & Reihenfolge</h4>
+        <div class="colHelp" id="cfgDisplayHelp" style="margin-bottom:12px;">Spalten ein-/ausblenden und via Pfeile sortieren.</div>
+
+          <div class="cfg-grid-2">
             <div>
               <div class="colHelp" style="margin:0 0 8px 0; font-weight:700; letter-spacing:.08em; text-transform:uppercase;" id="cfgDisplayDepTitle">Departures Board</div>
               <div class="colList" id="cfgDepCols"></div>
@@ -559,24 +699,26 @@ foreach ($possible_paths as $path) {
       </div>
 
       <div class="tabPanel" data-tab="xp">
-        <div class="card">
-                   <div class="field" style="grid-column:1/-1; margin: 6px 0 14px 0;">
-            <label id="cfgAgeBonusLabel">Registration/Age-Bonus</label>
-            <div class="fieldRow" style="padding:8px 0;">
-              <label style="display:flex; gap:8px; cursor:pointer;">
-                <input id="cfgAgeBonus" type="checkbox" />
-                <span id="cfgAgeBonusText">Registration/Age-Bonus aktivieren (zusätzlicher API Abruf)</span>
-              </label>
+        <h4 id="cfgXpTitle" style="margin-bottom:16px; color:var(--primary);">XP Berechnung</h4>
+
+        <div class="cfg-section">
+            <div class="cfg-row">
+                <div>
+                    <label for="cfgAgeBonus" id="cfgAgeBonusLabel">Registration / Age Bonus</label>
+                    <span class="sub" id="cfgAgeBonusHint">Lädt Registrierungsdatum (Extra API Request)</span>
+                </div>
+                <label class="toggle"><input id="cfgAgeBonus" type="checkbox"><span class="slider"></span></label>
             </div>
-            <div class="tiny" id="cfgAgeBonusHint" style="color:var(--text-muted); font-size:11px;"></div>
-          </div>
-<h4 id="cfgXpTitle">XP Score (0-100)</h4>
-          <div class="formGrid" style="grid-template-columns: 1fr 1fr 1fr 1fr;">
-            <div class="field"><label id="cfgT1Label">T1 (Neu)</label><input id="cfgT1" type="number" /></div>
-            <div class="field"><label id="cfgT2Label">T2 (Start)</label><input id="cfgT2" type="number" /></div>
-            <div class="field"><label id="cfgT3Label">T3 (Fortg.)</label><input id="cfgT3" type="number" /></div>
-            <div class="field"><label id="cfgT4Label">T4 (Erf.)</label><input id="cfgT4" type="number" /></div>
-          </div>
+        </div>
+
+        <div class="colHelp" style="margin-bottom:12px;">Level-Schwellenwerte (0-100 XP)</div>
+        <div class="cfg-section">
+             <div class="cfg-row">
+                 <div class="field"><label id="cfgT1Label">T1 (Neu)</label><input class="cfg-input" id="cfgT1" type="number"></div>
+                 <div class="field"><label id="cfgT2Label">T2 (Start)</label><input class="cfg-input" id="cfgT2" type="number"></div>
+                 <div class="field"><label id="cfgT3Label">T3 (Fortg.)</label><input class="cfg-input" id="cfgT3" type="number"></div>
+                 <div class="field"><label id="cfgT4Label">T4 (Erf.)</label><input class="cfg-input" id="cfgT4" type="number"></div>
+             </div>
         </div>
       </div>
 
@@ -637,7 +779,7 @@ foreach ($possible_paths as $path) {
   const REX_RULES_URL = "rex_rwys.json";
   const VATSIM_DATA_URL = "https://data.vatsim.net/v3/vatsim-data.json";
   const CORE_API_BASE = "https://api.vatsim.net/v2";
-  const CORS_PROXY = "https://vfids.marcelsemelka.workers.dev/?url=";
+  const CORS_PROXY = "";
   // Fallback-Proxy (hilft gegen sporadische 504 vom Worker/Upstream)
   const OVERPASS_PROXIES = [
     CORS_PROXY,
@@ -651,7 +793,7 @@ foreach ($possible_paths as $path) {
    ********************/
   const I18N = {
     de: {
-      brand_sub: "V0.8a",
+      brand_sub: "V0.85a",
       airport_label: "Airports (Tabs)",
       cfg_title: "Einstellungen",
       refresh_title: "Sofort neu laden",
@@ -796,11 +938,15 @@ foreach ($possible_paths as $path) {
           status_lineup_rwy: "LINEUP RWY {rwy}",
           status_local: "LOCAL",
           runway_info_pred: "⚠ PRED: {rwys}",
+          runway_pred_hidden: "Prädiktive Runways ausgeblendet",
       runway_loading: "Lade Runways...",
+          info_modal_title: "Hinweis",
+          info_modal_body: "<p>Bitte beachte, dass die Anwendung aufgrund der komplexen Algorithmen zur Status-Erkennung und Zeitberechnung ca. <b>3 bis 5 Minuten</b> benötigt, um präzise Werte (z.B. genaue Gates oder berechnete ETAs) anzuzeigen.</p><p>Nach dem ersten Daten-Zyklus stabilisieren sich die Anzeigen automatisch.</p>",
+          info_dont_show: "Nicht erneut anzeigen",
 
     },
     en: {
-      brand_sub: "V0.8a",
+      brand_sub: "V0.85a",
       airport_label: "Airports (Tabs)",
       cfg_title: "Settings",
       refresh_title: "Refresh now",
@@ -945,7 +1091,11 @@ foreach ($possible_paths as $path) {
           status_lineup_rwy: "LINEUP RWY {rwy}",
           status_local: "LOCAL",
                   runway_info_pred: "⚠ PRED: {rwys}",
+                                  runway_pred_hidden: "Predictive runways hidden",
                   runway_loading: "Loading runways...",
+                  info_modal_title: "Note",
+                  info_modal_body: "<p>Please note that due to complex logic and algorithms for status detection and time estimation, the application requires about <b>3 to 5 minutes</b> to show highly accurate values (e.g., precise gates or calculated ETAs).</p><p>The data will stabilize automatically after the first few cycles.</p>",
+                  info_dont_show: "Don't show again",
     }
   };
 
@@ -1102,9 +1252,12 @@ const GATE_JITTER_GRACE_MS = 20 * 1000;    // kurzzeitig minimal bewegt -> Gate 
     try {
       const r = await fetch(`${DB_CONFIG.apiUrl}?action=set`, {
         method: 'POST',
+        headers: { 'Content-Type': 'application/json' }, // JSON ist robuster für große Daten
+        credentials: 'include',
         body: JSON.stringify({ key, value })
       });
-      return r.ok;
+      if(!r.ok) throw new Error(`HTTP ${r.status}`); // Fehler werfen für Console
+      return true;
     } catch (e) {
       console.error("DB Save failed", e);
       return false;
@@ -1279,6 +1432,7 @@ const GATE_JITTER_GRACE_MS = 20 * 1000;    // kurzzeitig minimal bewegt -> Gate 
   const refreshBtn = document.getElementById("refreshBtn");
   const fullscreenBtn = document.getElementById("fullscreenBtn");
   const configBtn = document.getElementById("configBtn");
+  const debugToggleBtn = document.getElementById("debugToggleBtn");
   const utcClockEl = document.getElementById("utcClock");
 
   const feedDot = document.getElementById("feedDot");
@@ -1288,6 +1442,35 @@ const GATE_JITTER_GRACE_MS = 20 * 1000;    // kurzzeitig minimal bewegt -> Gate 
   const apiDot = document.getElementById("apiDot");
   const apiText = document.getElementById("apiText");
   const apiExtra = document.getElementById("apiExtra");
+
+  // Sidebar Hooks
+  const mobileMenuBtn = document.getElementById("mobileMenuBtn");
+  const mobileSidebar = document.getElementById("mobileSidebar");
+  const sidebarOverlay = document.getElementById("sidebarOverlay");
+  const configBtnMobile = document.getElementById("configBtnMobile");
+  const sidebarCloseBtn = document.getElementById("sidebarCloseBtn");
+  const sidebarRunways = document.getElementById("sidebarRunways");
+  const sidebarMetar = document.getElementById("sidebarMetar");
+
+  function toggleSidebar(forceClose = false) {
+    const open = forceClose ? false : !mobileSidebar.classList.contains("open");
+    mobileSidebar.classList.toggle("open", open);
+    sidebarOverlay.classList.toggle("open", open);
+    document.body.classList.toggle("sidebar-open", open);
+  }
+
+  mobileMenuBtn.addEventListener("click", () => toggleSidebar());
+  sidebarOverlay.addEventListener("click", () => toggleSidebar(true));
+  sidebarCloseBtn.addEventListener("click", () => toggleSidebar(true));
+  configBtnMobile.addEventListener("click", () => {
+    toggleSidebar(true);
+    openConfigModal();
+  });
+
+  // Schließe Sidebar bei Esc
+  document.addEventListener("keydown", (e) => {
+    if(e.key === "Escape") toggleSidebar(true);
+  });
 
   const boardsContainer = document.getElementById("boardsContainer");
   const viewTemplate = document.getElementById("airportViewTemplate");
@@ -1542,21 +1725,28 @@ const GATE_JITTER_GRACE_MS = 20 * 1000;    // kurzzeitig minimal bewegt -> Gate 
   /********************
    * Board Columns (header + rendering)
    ********************/
-  const COL_META = {
-    time: { width:"90px", thClass:"center", tdClass:"center" },
-    callsign: { width:"90px" },
-    ap: { width:"70px" },
-    typeRoute: { width:null, tdClass:"cell-route" },
-    altgs: { width:"125px", thClass:"right", tdClass:"right" },
-    status: { width:"170px" },
-    xp: { width:"110px" }
-  };
+const COL_META = {
+    // Links
+    time:      { width: "65px",  thClass: "center", tdClass: "center" },
+    callsign:  { width: "80px",  tdClass: "bold" },
+    ap:        { width: "50px" },
 
+    // Mitte
+    typeRoute: { width: null,    tdClass: "cell-route" },
+
+    // Rechts
+    altgs:     { width: "65px",  thClass: "right", tdClass: "right" },
+    status:    { width: "160px", tdClass: "status-cell" },
+    xp:        { width: "60px",  thClass: "right", tdClass: "center" }
+};
   function colHeaderLabel(key, boardType){
     if(key === "time") return (boardType === "dep") ? t("th_time_std") : t("th_time_eta");
     if(key === "ap") return (boardType === "dep") ? t("th_to") : t("th_from");
     if(key === "callsign") return t("th_callsign");
-    if(key === "typeRoute") return t("th_type_route");
+        if(key === "typeRoute") {
+                // HTML-Tags entfernen für reine Textanzeige im Config-Menü
+                return t("th_type_route").replace(/<[^>]*>/g, "");
+        }
     if(key === "altgs") return t("th_alt_gs");
     if(key === "status") return t("th_status");
     if(key === "xp") return t("th_xp");
@@ -1572,6 +1762,7 @@ const GATE_JITTER_GRACE_MS = 20 * 1000;    // kurzzeitig minimal bewegt -> Gate 
       const th = document.createElement("th");
       const meta = COL_META[key] || {};
       th.innerHTML = colHeaderLabel(key, boardType); // CHANGE: innerHTML allows <span> tags      if(meta.width) th.style.width = meta.width;
+      if(meta.width) th.style.width = meta.width;
       if(meta.thClass) th.className = meta.thClass;
       rowEl.appendChild(th);
     }
@@ -1601,7 +1792,7 @@ const GATE_JITTER_GRACE_MS = 20 * 1000;    // kurzzeitig minimal bewegt -> Gate 
        document.getElementById("cfgAirportLabel").textContent = t("airport_label");
     cfgIntervalLabel.textContent = t("cfg_interval");
     cfgLanguageLabel.textContent = t("cfg_language");
-    cfgFilterLabel.textContent = t("cfg_filter");
+    if(cfgFilterLabel) cfgFilterLabel.textContent = t("cfg_filter");
     cfgPrefilesText.textContent = t("cfg_prefiles");
     cfgHideArrText.textContent = t("cfg_hide_arr");
     cfgHideDepText.textContent = t("cfg_hide_dep");
@@ -1614,7 +1805,7 @@ const GATE_JITTER_GRACE_MS = 20 * 1000;    // kurzzeitig minimal bewegt -> Gate 
     cfgDisplayArrTitle.textContent = t("cfg_display_arr");
     cfgXpTitle.textContent = t("cfg_xp_title");
     cfgAgeBonusLabel.textContent = t("cfg_age_bonus_label");
-    cfgAgeBonusText.textContent = t("cfg_age_bonus_text");
+    if(cfgAgeBonusText) cfgAgeBonusText.textContent = t("cfg_age_bonus_text");
     cfgAgeBonusHint.textContent = t("cfg_age_bonus_hint");
     cfgT1Label.textContent = t("cfg_t1");
     cfgT2Label.textContent = t("cfg_t2");
@@ -1637,6 +1828,14 @@ const GATE_JITTER_GRACE_MS = 20 * 1000;    // kurzzeitig minimal bewegt -> Gate 
     pilotCardBreakdown.textContent = t("pilot_card_breakdown");
     pilotCardHistory.textContent = t("pilot_card_history");
     historyNote.textContent = t("history_note");
+
+    // Info modal texts (only if injected)
+    const infoTitle = document.getElementById("infoModalTitle");
+    const infoText = document.getElementById("infoModalText");
+    const infoDontShow = document.getElementById("infoDontShowText");
+    if(infoTitle) infoTitle.textContent = t("info_modal_title");
+    if(infoText) infoText.innerHTML = t("info_modal_body");
+    if(infoDontShow) infoDontShow.textContent = t("info_dont_show");
 
     rebuildLegend();
 
@@ -1813,112 +2012,133 @@ async function saveDataToDbAndCleanLocal(key, data) {
   }
 }
 
-
 function parseActiveRunways(station) {
     // 1. Text Vorbereitung
     let rawText = Array.isArray(station.text_atis) ? station.text_atis.join(" ") : (station.text_atis || "");
-    if (!rawText) return { station: station.callsign, arrivals: [], departures: [] };
+    if (!rawText) return { icao: station.callsign.split("_")[0], type: "UNKNOWN", arrivals: [], departures: [] };
 
-    // Alles in Großbuchstaben und doppelte Leerzeichen entfernen
-    let cleanText = rawText.toUpperCase().replace(/\s+/g, ' ').trim();
+    // --- STEP 1: NORMALIZATION ---
+    let text = rawText.toUpperCase().replace(/\s+/g, ' ').trim();
 
-    // KDFW/US-Format Fix: "RWYS, 36L" -> "RWYS 36L" (Komma entfernen, wenn es direkt auf Keyword folgt)
-    cleanText = cleanText.replace(/(RWYS|RUNWAYS|RWY|RUNWAY),\s+/g, "$1 ");
-    // Generelle Bereinigung von Satzzeichen, die das Parsing stören könnten (außer Slash für R/L Trennung wenn nötig, hier aber meist Spaces)
-    cleanText = cleanText.replace(/[\.]/g, " ");
+    // Fix: "@" entfernen (KSFO) und "RY" zu "RWY"
+    text = text.replace(/@/g, "").replace(/\bRY\b/g, "RWY");
 
-    // 2. Pre-Processing / Sanitizing
-    // A. Closed Runways
-    // Entfernt Zeilen wie "RWY 09R AND 09C CLSD" komplett, damit die Zahlen nicht gematched werden.
-    // Wir erlauben AND, &, Komma und Leerzeichen zwischen den Runways vor dem CLSD keyword.
-    cleanText = cleanText.replace(/(?:RWY|RUNWAY|RWYS|TWY|TAXIWAY)\s+(?:[0-9]{2}[LCR]?|(?:\s+(?:AND|&|,)\s+)|[\s,])+(?:CLSD|CLOSED|NOT\sAVBL|NOT\sAVAILABLE)/gi, " ");
+    // Fix: KMSP "VIS RWY 12R APCH IN USE" -> "VIS RWY 12R IN USE"
+    // Wir löschen das Wort "APCH" nur, wenn es direkt vor "IN USE" steht.
+    text = text.replace(/\bAPCH\s+IN\s+USE\b/g, "IN USE");
 
-    // B. Conditions / Snow Reports entfernen
-    cleanText = cleanText.replace(/(?:RUNWAY CONDITION|RCR RWY|SNOW REPORT).*?(?=\.|APP|DEP|ARR|WIND|QNH|TL|TRL|VIS)/g, " ");
-    // C. Zahlen entfernen, die wie Runways aussehen, aber keine sind (Time, Wind, QNH, FL)
-    // TIME 1620 -> weg, QNH 1013 -> weg, 24005KT -> weg
-    cleanText = cleanText.replace(/TIME\s?[0-9]{4}/g, " ");
-    cleanText = cleanText.replace(/QNH\s?[0-9]{4}/g, " ");
-    cleanText = cleanText.replace(/[0-9]{3}(?:V[0-9]{3})?[0-9]{2}(?:G[0-9]{2})?KT/g, " "); // Wind
-    cleanText = cleanText.replace(/FL\s?[0-9]{2,3}/g, " ");
+    // Punkte entfernen (außer Dezimalzahlen)
+    text = text.replace(/(\d)\.(\d)/g, "$1$2").replace(/\./g, " ");
 
-    // D. L/R Expansion für einfacheres Matching (25 L/R -> 25L 25R)
-    cleanText = cleanText.replace(/([0-9]{2})\s?(?:L\/R|L\+R|L\s(?:AND|&)\sR|R\/L)/g, "$1L $1R");
+    // --- STEP 2: AGGRESSIVE SANITIZING ---
 
-    // 3. Extraktions-Logik
-    const rwyPattern = /([0-9]{2}[LCR]?)/g;
-    // Helper zum Sammeln aller Matches einer Regex-Schleife
-    const collectMatches = (regex, groupIndex = 1) => {
+    // 1. Kill Intersections / Taxiways / Holds
+    text = text.replace(/\b(?:INTERSECTION|INT|POINT|TWY|TAXIWAY|HOLD\s+SHORT\s+OF)\s+[A-Z0-9]+\b/g, " ");
+
+    // 2. Kill METAR Header & Dates
+    text = text.replace(/(?:METAR|SPECI)\s+[0-9]{6}Z?/g, " ");
+
+    // 3. Kill Zulu Time (Fix für die "19" aus "1953Z" oder "1419Z")
+    // Löscht alles, was wie eine Uhrzeit aussieht (4 Ziffern + Z), egal ob "TIME" davor steht.
+    text = text.replace(/\b[0-9]{4}Z\b/g, " ");
+
+    // 4. Kill TORA / TODA / ASDA
+    text = text.replace(/\b(?:TORA|TODA|ASDA|LDA)\s+[0-9]{4}\b/g, " ");
+
+    // 5. Kill METAR RVR
+    text = text.replace(/\bR[0-9]{2}[LCR]?\/[A-Z0-9\/]+\b/g, " ");
+
+    // 6. Kill Wind Variable
+    text = text.replace(/\b[0-9]{3}\s*V\s*[0-9]{3}\b/g, " ");
+
+    // 7. Kill Wind (Standard)
+    text = text.replace(/\b[0-9]{3}(?:V[0-9]{3})?[0-9]{2,3}(?:G[0-9]{2,3})?KT\b/g, " ");
+
+    // 8. Kill Visibility (4-stellige Zahlen, Fix für EDDF "0700")
+    text = text.replace(/\b[0-9]{4}\b/g, " ");
+
+    // 9. Kill Temperatures (T 19, Temp 19, 19/04) (Fix für mögliche "19")
+    text = text.replace(/\b(?:T|TEMP|TEMPERATURE)\s?(?:M|P)?[0-9]{1,2}\b/g, " "); // T 19
+    text = text.replace(/\b(?:M|P)?[0-9]{2}\/(?:M|P)?[0-9]{2}\b/g, " "); // 19/04
+
+    // 10. Kill Standard Noise (Time with Keyword, QNH)
+    text = text.replace(/TIME\s?[0-9]{4}[A-Z]*/g, " ");
+    text = text.replace(/(?:QNH|A)\s?[0-9]{3,4}/g, " ");
+
+    // 11. Fix US Format "17R AND LEFT" -> "17R 17L"
+    text = text.replace(/([0-9]{2})([LCR]?)\s*(?:AND|&|OR|,)\s+LEFT/g, "$1$2 $1L");
+    text = text.replace(/([0-9]{2})([LCR]?)\s*(?:AND|&|OR|,)\s+RIGHT/g, "$1$2 $1R");
+    text = text.replace(/([0-9]{2})([LCR]?)\s*(?:AND|&|OR|,)\s+CENTER/g, "$1$2 $1C");
+
+    // 12. Fix Verklebte Runways (RWY26L -> RWY 26L)
+    text = text.replace(/(RWYS?|RUNWAY)([0-9]{2})/g, "$1 $2");
+
+    // 13. Kill Condition Reports / Snowtam (KMSP Fix)
+    // Löscht alles ab "CONDITION" bis zum nächsten Keyword oder "CTN" (Caution)
+    text = text.replace(/(?:RWY|RUNWAY)?(?:\s+[0-9]{2}[LCR]?)?\s*(?:CONDITION|RCR|RWYCC|CC|SNOW\s+REPORT)\s+.*?(?=(?:RWY|RUNWAY|WIND|VIS|CAVOK|CLOUDS|TEMP|QNH|TREND|NOSIG|BECMG|TEMPO|INFO|EXPECT|ARR|DEP|LANDING|TKOF|CTN)|$)/g, " ");
+
+    // 14. Kill RVR Text
+    text = text.replace(/(?:RVR|RUNWAY VISUAL RANGE).*?(?=(?:RWY|RUNWAY|WIND|VIS|CAVOK|CLOUDS|TEMP|QNH|TREND|NOSIG|BECMG|TEMPO|INFO|EXPECT|ARR|DEP|LANDING|TKOF)|$)/g, " ");
+
+    // 15. Kill Closed Runways
+    text = text.replace(/(?:RWY|RUNWAY|RWYS|TWY|TAXIWAY)\s+(?:[0-9]{2}[LCR]?|[A-Z])+(?:(?:\s+(?:AND|&|,)\s+)(?:[0-9]{2}[LCR]?|[A-Z])+)*\s+(?:CLSD|CLOSED|NOT\sAVBL)/g, " ");
+
+    // 16. L/R Expansion (25 L/R -> 25L 25R)
+    text = text.replace(/([0-9]{2})\s?(?:L\/R|L\+R|L\s(?:AND|&)\sR|R\/L)/g, "$1L $1R");
+
+
+    // --- STEP 3: EXTRACTION ---
+
+    const extractRwys = (str) => {
+        if (!str) return [];
+        const pattern = /\b([0-3][0-9]|[1-9])([LCR])?\b/g;
         let matches = [];
         let m;
-        // Regex zurücksetzen
-        regex.lastIndex = 0;
-        while ((m = regex.exec(cleanText)) !== null) {
-            // groupIndex enthält die gefundene Runway oder Liste
-            let found = m[groupIndex].match(rwyPattern);
-            if (found) matches.push(...found);
-       }
-        // Validieren (01-36)
-        return matches.filter(r => {
-            let n = parseInt(r.substring(0,2), 10);
-            return n > 0 && n <= 36;
-        });
+        while ((m = pattern.exec(str)) !== null) {
+            let num = parseInt(m[1], 10);
+            if (num > 0 && num <= 36) {
+                let formatted = (num < 10 ? "0" + num : "" + num) + (m[2] ? m[2] : "");
+                matches.push(formatted);
+            }
+        }
+        return matches;
     };
 
-    let arrMatches = [];
-    let depMatches = [];
+    const listPattern = "(?:[0-9]{2}[LCR]?(?:[\\s,]+(?:AND|&|OR)?[\\s,]*[0-9]{2}[LCR]?)*)";
 
-    // Strategie 1: Harte Keywords (LDG 15, TKOF 23, ARR RWY 25)
-    // KDFW: "EXPECT ILS TO RWYS, 36L, 35C..." -> Komma nach RWYS beachten
+    let arrRaw = [];
+    let depRaw = [];
+    let genRaw = [];
 
-    // ARR / LDG
-    // Sucht nach Keyword gefolgt von Runway(s)
-    const rgxArr = /(?:ARR|ARRIVAL|LANDING|LDG|EXPECT\s+(?:ILS|LOC|RNP|VISUAL|APP|APPROACH|VECTORS\sTO|INSTRUMENT\sAPP.*TO)|SIMUL\s+(?:VISUAL|INSTRUMENT)?\s*AP(?:PROA)?CH)\s+(?:TO|ON|IN|FOR|RWY|RUNWAY|RWYS|RUNWAYS)?[\s,]*([0-9]{2}[LCR]?(?:(?:[\s,]+(?:AND|&|OR)?[\s,]+)?[0-9]{2}[LCR]?)*)/g;
-    arrMatches.push(...collectMatches(rgxArr));
+    // A. ARRIVAL MATCHING
+    // "VIS" added as keyword for KMSP "VIS RWY 12R..."
+    const arrKeywords = "ARR|ARRIVAL|ARRIVALS|LANDING|LNDG|EXPECT\\s+(?:(?:[A-Z]+\\s+)*)(?:ILS|LOC|RNP|VISUAL|VOR|APP|APPROACH|VECTORS)|MAIN\\s+LANDING|VIS";
+    const rgxArr = new RegExp(`(?:${arrKeywords}).*?(?:RWY|RUNWAY|RWYS|RUNWAYS)?\\s*(${listPattern})`, "g");
 
-    // DEP / TKOF
-    const rgxDep = /(?:DEP|DEPARTURE|TKOF|TAKEOFF|DEPG)\s+(?:TO|ON|IN|FOR|RWY|RUNWAY|RWYS|RUNWAYS)?[\s,]*([0-9]{2}[LCR]?(?:(?:[\s,]+(?:AND|&|OR)?[\s,]+)?[0-9]{2}[LCR]?)*)/g;
-    depMatches.push(...collectMatches(rgxDep));
+    let m;
+    while ((m = rgxArr.exec(text)) !== null) arrRaw.push(...extractRwys(m[1]));
 
-    // Strategie 2: Listen-Parsing (Runway 25 and 18)
-    // Wir suchen nach expliziten "Runway X and Y" Konstrukten für ARR/DEP Keywords
-    // Das ist komplexer, daher vereinfachen wir: Wenn Strategie 1 fehlgeschlagen ist oder ergänzend.
-    // Hier: "RUNWAYS IN USE 26L AND 26R" (EDDM)
+    // Fallback: LDG ohne Keyword "RWY"
+    const rgxLdgNoKw = /LDG\s+([0-9]{2}[LCR]?)/g;
+    while ((m = rgxLdgNoKw.exec(text)) !== null) arrRaw.push(...extractRwys(m[1]));
 
-    if (arrMatches.length === 0 && depMatches.length === 0) {
-         const rgxGen = /(?:RWY|RUNWAY|RWYS)(?:\s+IN\s+USE|\s+ARE|\s+IS|:)\s+([0-9]{2}[LCR]?(?:(?:\s+AND|\s+OR|,|\s+)\s+[0-9]{2}[LCR]?)*)/g;
-        let genRes = collectMatches(rgxGen);
-        if (genRes.length > 0) {
-            arrMatches = genRes;
-            depMatches = genRes;
-        }
-    }
+    // B. DEPARTURE MATCHING
+    const depKeywords = "DEP|DEPARTURE|DEPARTURES|DEPG|DEPTG|TKOF|TAKEOFF|MAIN\\s+DEPARTURE";
+    const rgxDep = new RegExp(`(?:${depKeywords}).*?(?:RWY|RUNWAY|RWYS|RUNWAYS)?\\s*(${listPattern})`, "g");
+    while ((m = rgxDep.exec(text)) !== null) depRaw.push(...extractRwys(m[1]));
 
-    // Strategie 3: General Keywords (RWY 09L) - Fallback für EDDV
-    // Wenn bisher nichts gefunden wurde, suche nach "RWY XX" Mustern, die übrig geblieben sind (da CLOSED schon weg ist).
-    if (arrMatches.length === 0 && depMatches.length === 0) {
-        console.log(`RWY DEBUG ${station.callsign}: Strat 1/2 empty, trying Strat 3 (Simple) on:`, cleanText);
-        // Suche nach "RWY 09L" oder "RUNWAY 25" die nicht Teil eines CLSD Blocks waren
-        // Flexibler: RWY 09L (auch wenn danach Text kommt)
-        const rgxSimple = /(?:RWY|RUNWAY|RWYS)(?:\s+IN\s+USE|\s+ARE|\s+IS|:)?\s+([0-9]{2}[LCR]?(?:(?:\s+AND|\s+OR|,|\s+)\s+[0-9]{2}[LCR]?)*)/g;
-        let simpleRes = collectMatches(rgxSimple);
-        if (simpleRes.length > 0) {
-            arrMatches = simpleRes;
-            depMatches = simpleRes;
-        }
-    }
+    // C. GENERAL / LOOSE MATCHING
+    const rgxInUse = new RegExp(`(?:RWY|RUNWAY|RWYS|RUNWAYS)(?:\\s+IN\\s+USE|\\s+ARE|\\s+IS|:)\\s+(${listPattern})`, "g");
+    while ((m = rgxInUse.exec(text)) !== null) genRaw.push(...extractRwys(m[1]));
 
-    // Strategie 4: Bracket Format [RWY] 35 (Plugins)
-    if (arrMatches.length === 0 && depMatches.length === 0) {
-        const bracketRegex = /\[RWY\]\s*((?:[0-9]{2}[LCR]?(?:[\s,]+)?)+)/g;
-        let brackets = collectMatches(bracketRegex);
-        arrMatches.push(...brackets);
-        depMatches.push(...brackets);
-    }
-    console.log(`RWY DEBUG ${station.callsign}:`, {arr: arrMatches, dep: depMatches});
-    // 4. Deduplizierung und Zuweisung
-    arrMatches = [...new Set(arrMatches)];
-    depMatches = [...new Set(depMatches)];
+    const rgxLoose = new RegExp(`(?:RWY|RUNWAY|RWYS|RUNWAYS)\\s+(${listPattern})`, "g");
+    while ((m = rgxLoose.exec(text)) !== null) genRaw.push(...extractRwys(m[1]));
+
+    const bracketMatch = text.match(/\[RWY\]\s*([0-9A-Z\s,]+)/);
+    if (bracketMatch) genRaw.push(...extractRwys(bracketMatch[1]));
+
+
+    // --- STEP 4: LOGIC MERGE ---
 
     let result = {
         icao: station.callsign.split("_")[0],
@@ -1928,182 +2148,323 @@ function parseActiveRunways(station) {
         departures: []
     };
 
-    if (/_D_ATIS$/.test(station.callsign)) {
+    const isDepAtis = /_D_ATIS$/.test(station.callsign);
+    const isArrAtis = /_A_ATIS$/.test(station.callsign);
+
+    arrRaw = [...new Set(arrRaw)];
+    depRaw = [...new Set(depRaw)];
+    genRaw = [...new Set(genRaw)];
+
+    if (isDepAtis) {
         result.type = "DEP_ONLY";
-        result.departures = depMatches.length > 0 ? depMatches : arrMatches;
+        // D-ATIS: Nur Departures
+        let combined = [...depRaw, ...genRaw];
+        result.departures = [...new Set(combined)];
     }
-    else if (/_A_ATIS$/.test(station.callsign)) {
+    else if (isArrAtis) {
         result.type = "ARR_ONLY";
-        result.arrivals = arrMatches.length > 0 ? arrMatches : depMatches;
+        // A-ATIS: Nur Arrivals
+        let combined = [...arrRaw, ...genRaw];
+        result.arrivals = [...new Set(combined)];
     }
     else {
-        result.arrivals = arrMatches;
-        result.departures = depMatches;
+        // Combined ATIS
+        if (arrRaw.length > 0 && depRaw.length > 0) {
+            result.arrivals = arrRaw;
+            result.departures = depRaw;
+        } else {
+            result.arrivals = arrRaw.length > 0 ? arrRaw : genRaw;
+            result.departures = depRaw.length > 0 ? depRaw : genRaw;
+        }
     }
+
+    result.arrivals.sort();
+    result.departures.sort();
 
     return result;
 }
 
-// Helper für REX Rules: Zeitfenster prüfen (UTC)
-function checkTimeRange(startStr, endStr) {
-    if (!startStr || !endStr) return true;
-    const now = new Date();
-    const curMin = now.getUTCHours() * 60 + now.getUTCMinutes();
-
-    const [sH, sM] = startStr.split(":").map(Number);
-    const [eH, eM] = endStr.split(":").map(Number);
-    const startMin = sH * 60 + sM;
-    const endMin = eH * 60 + eM;
-
-    if (startMin <= endMin) {
-        // Normaler Bereich (z.B. 09:00 - 14:00)
-        return curMin >= startMin && curMin <= endMin;
-    } else {
-        // Über Mitternacht (z.B. 22:00 - 06:00)
-        return curMin >= startMin || curMin <= endMin;
-    }
+// --- Time helpers (unverändert) ---------------------------------------------
+function checkTimeRange(startStr, endStr, now = new Date()) {
+  if (!startStr || !endStr) return true;
+  const curMin = now.getUTCHours() * 60 + now.getUTCMinutes();
+  const [sH, sM] = startStr.split(":").map(Number);
+  const [eH, eM] = endStr.split(":").map(Number);
+  const startMin = sH * 60 + sM;
+  const endMin = eH * 60 + eM;
+  return (startMin <= endMin) ? (curMin >= startMin && curMin <= endMin) : (curMin >= startMin || curMin <= endMin);
 }
 
-// Helper für REX Rules: Evaluierung einer einzelnen Runway-Operation
-function checkRexRestriction(icao, rwyDes, opType, metar) {
-    const airportRules = rexRules[icao];
-    if (!airportRules) return { allowed: true, priority: 99 }; // Keine Regeln -> Default OK
-
-    const rwyRules = airportRules[rwyDes];
-    if (!rwyRules) return { allowed: true, priority: 99 };
-
-    const op = rwyRules[opType]; // "landing" oder "takeoff"
-    if (!op) return { allowed: true, priority: 99 };
-
-    // 1. Basis-Status
-    if (op.status === "FORBIDDEN") return { allowed: false, reason: "Status FORBIDDEN" };
-
-    // 2. Restrictions prüfen
-    if (Array.isArray(op.restrictions)) {
-        const windDir = (metar.wind && metar.wind.dir !== "VRB") ? Number(metar.wind.dir) : 0;
-        const windSpd = (metar.wind) ? Number(metar.wind.spd) : 0;
-        const rwyHdg = parseInt(rwyDes.substring(0, 2)) * 10;
-
-        // Komponenten berechnen
-        const rad = (windDir - rwyHdg) * (Math.PI / 180);
-        const headwind = Math.cos(rad) * windSpd;
-        const tailwind = -headwind;
-        const crosswind = Math.abs(Math.sin(rad) * windSpd);
-
-        for (const res of op.restrictions) {
-            let conditionMet = false;
-
-            if (res.type === "TIME_UTC") {
-                conditionMet = checkTimeRange(res.start, res.end);
-                if (res.condition === "ALTERNATION_WEEKLY") {
-                    // Simple Fallback: Even/Odd ISO Week logic könnte hier hin. Ignorieren wir erstmal.
-                    conditionMet = false;
-                }
-            } else if (res.type === "METAR_WIND") {
-                if (res.condition === "TAILWIND_LIMIT") {
-                    if (tailwind > (res.limit_kt || 999)) conditionMet = true;
-                } else if (res.condition === "CROSSWIND_LIMIT") {
-                    if (crosswind > (res.limit_kt || 999)) conditionMet = true;
-                } else if (res.condition === "HEADWIND_REQUIRED") {
-                     // Bedingung ist "Wir haben Headwind".
-                     // Enforcement REQUIRED_FOR_USE heißt: Wenn KEIN Headwind -> Forbidden.
-                     // Hier mappen wir: conditionMet = "Haben wir Headwind?"
-                     conditionMet = (headwind >= (res.min_kt || 0));
-                } else if (res.condition === "SECTOR") {
-                    // Einfacher Sektor-Check (ohne 360-Wrap Logik für Kürze vereinfacht)
-                    conditionMet = (windDir >= res.from_deg && windDir <= res.to_deg);
-                }
-            } else if (res.type === "METAR_VISIBILITY") {
-                // Placeholder
-            }
-
-            // Auswertung Enforcement
-            if (res.enforcement === "FORBIDDEN") {
-                if (conditionMet) return { allowed: false, reason: `Rule ${res.type} matched FORBIDDEN` };
-            } else if (res.enforcement === "REQUIRED_FOR_USE") {
-                if (!conditionMet) return { allowed: false, reason: `Rule ${res.type} requirement unmet` };
-            }
-        }
-    }
-
-    // Wenn Status RESTRICTED war, aber keine Restriction gegriffen hat (oder alle erfüllt sind) -> Allowed
-    return { allowed: true, priority: op.priority || 5 };
+function checkTimeRangeLocal(startStr, endStr, tz, now = new Date()) {
+  if (!startStr || !endStr || !tz) return true;
+  const parts = new Intl.DateTimeFormat("en-US", { timeZone: tz, hour: "2-digit", minute: "2-digit", hour12: false }).formatToParts(now);
+  const hh = Number(parts.find(p => p.type === "hour")?.value ?? "0");
+  const mm = Number(parts.find(p => p.type === "minute")?.value ?? "0");
+  const curMin = hh * 60 + mm;
+  const [sH, sM] = startStr.split(":").map(Number);
+  const [eH, eM] = endStr.split(":").map(Number);
+  const startMin = sH * 60 + sM;
+  const endMin = eH * 60 + eM;
+  return (startMin <= endMin) ? (curMin >= startMin && curMin <= endMin) : (curMin >= startMin || curMin <= endMin);
 }
 
-function predictRunways(icao, metar, history) {
+function isWindInSector(windDir, fromDeg, toDeg) {
+  if (fromDeg == null || toDeg == null) return false;
+  if (fromDeg <= toDeg) return windDir >= fromDeg && windDir <= toDeg;
+  return windDir >= fromDeg || windDir <= toDeg;
+}
 
-    const rIdx = runwayIndexByIcao.get(icao);
+function getVisibilityMeters(metar) {
+  const v = metar?.visibility_m ?? metar?.vis_m ?? metar?.visibility ?? metar?.vis;
+  return (v != null && Number.isFinite(Number(v))) ? Number(v) : null;
+}
 
-    if (!rIdx) return null;
+function getCeilingFeet(metar) {
+  const c = metar?.ceiling_ft ?? metar?.cig_ft ?? metar?.ceiling ?? metar?.cig;
+  return (c != null && Number.isFinite(Number(c))) ? Number(c) : null;
+}
 
-    const wDirVal = (metar.wind && metar.wind.dir != null) ? metar.wind.dir : metar.wdir;
-    const wSpdVal = (metar.wind && metar.wind.spd != null) ? metar.wind.spd : metar.wspd;
+// --- Core: Evaluate runway operation with LOGGING ---------------------------
 
-    if (wDirVal == null) return null;
+function checkRexRestriction(icao, rwyDes, opType, metar, now = new Date(), logs = []) {
+  const logPrefix = `[${icao} ${rwyDes} ${opType.toUpperCase()}]`;
+  const airportRules = rexRules[icao];
 
+  if (!airportRules || !airportRules[rwyDes] || !airportRules[rwyDes][opType]) {
+    logs.push(`${logPrefix} No rules defined. Default allowed.`);
+    return { allowed: true, priority: 5, required: false };
+  }
 
-    const windDir = wDirVal === "VRB" ? 0 : Number(wDirVal);
-    const windSpd = Number(wSpdVal || 0);
+  const op = airportRules[rwyDes][opType];
 
-    const arrCandidates = [];
-    const depCandidates = [];
+  if (op.status === "FORBIDDEN") {
+    logs.push(`${logPrefix} Status is FORBIDDEN.`);
+    return { allowed: false, reason: "Status FORBIDDEN", required: false };
+  }
 
-    // Alle bekannten Endpoints prüfen
-    rIdx.endpoints.forEach(ep => {
-        const des = ep.designator;
-        const num = parseInt(des.substring(0, 2), 10) * 10;
+  let priority = op.priority || 5;
+  let hasAllowGate = false;
+  let allowGateMet = false;
+  let requiredNow = false;
 
-        // Physics: Headwind Score
-        const diff = (windDir - num) * (Math.PI / 180);
-        const hw = Math.cos(diff) * windSpd;
+  if (Array.isArray(op.restrictions)) {
+    const windDir = (metar?.wind && metar.wind.dir !== "VRB") ? Number(metar.wind.dir) : 0;
+    const windSpd = (metar?.wind) ? Number(metar.wind.spd) : 0;
+    const rwyHdg = parseInt(rwyDes.substring(0, 2), 10) * 10;
+    const rad = (windDir - rwyHdg) * (Math.PI / 180);
+    const headwind = Math.cos(rad) * windSpd;
+    const tailwind = -headwind;
+    const crosswind = Math.abs(Math.sin(rad) * windSpd);
 
-        // Rules: JSON Logic Check
-        const arrCheck = checkRexRestriction(icao, des, "landing", { wind: { dir: windDir, spd: windSpd } });
-        const depCheck = checkRexRestriction(icao, des, "takeoff", { wind: { dir: windDir, spd: windSpd } });
+    for (const res of op.restrictions) {
+      let conditionMet = false;
+      let conditionUnknown = false;
+      let valDesc = "";
 
-        if (arrCheck.allowed) {
-            // Score = Headwind + Priority-Bonus (Prio 1 = +100kt Score, Prio 2 = +50kt)
-            // Damit sticht eine Prio-Bahn auch bei leichtem Tailwind eine Non-Prio-Bahn mit Headwind aus.
-            const prioBonus = (10 - (arrCheck.priority || 5)) * 15;
-            arrCandidates.push({ des, score: hw + prioBonus });
+      // Check Conditions
+      if (res.type === "TIME_UTC") {
+        conditionMet = checkTimeRange(res.start, res.end, now);
+        valDesc = `Now=${now.toISOString().substr(11,5)}Z Window=${res.start}-${res.end}`;
+      } else if (res.type === "METAR_WIND") {
+        if (res.condition === "TAILWIND_LIMIT") {
+          conditionMet = tailwind > (res.limit_kt ?? 999);
+          valDesc = `Tail=${Math.round(tailwind)}kt Limit=${res.limit_kt}kt`;
+        } else if (res.condition === "HEADWIND_REQUIRED") {
+          conditionMet = headwind >= (res.min_kt ?? 0);
+          valDesc = `Head=${Math.round(headwind)}kt Min=${res.min_kt}kt`;
+        } else if (res.condition === "SECTOR") {
+          const inSector = isWindInSector(windDir, res.from_deg, res.to_deg);
+          const spdOk = (res.min_speed_kt != null) ? (windSpd >= res.min_speed_kt) : true;
+          conditionMet = inSector && spdOk;
+          valDesc = `Wind=${windDir}° Sector=${res.from_deg}-${res.to_deg}°`;
+        } else if (res.condition === "CROSSWIND_LIMIT") {
+          conditionMet = crosswind > (res.limit_kt ?? 999);
+          valDesc = `XWind=${Math.round(crosswind)}kt Limit=${res.limit_kt}kt`;
         }
-        if (depCheck.allowed) {
-            const prioBonus = (10 - (depCheck.priority || 5)) * 15;
-            depCandidates.push({ des, score: hw + prioBonus });
+      } else if (res.type === "METAR_VISIBILITY") {
+        const vis = getVisibilityMeters(metar);
+        if (vis == null) conditionUnknown = true;
+        else {
+          conditionMet = vis >= (res.min_val_m ?? 0);
+          valDesc = `Vis=${vis}m Min=${res.min_val_m}m`;
         }
+      }
+
+      // Logic Enforcement
+      if (res.enforcement === "FORBIDDEN") {
+        if (conditionMet === true) {
+          logs.push(`${logPrefix} BLOCKED by ${res.type} (${res.condition || ''}). Details: ${valDesc}`);
+          return { allowed: false, reason: `${res.type} matched FORBIDDEN`, required: false };
+        }
+      } else if (res.enforcement === "REQUIRED_FOR_USE") {
+        if (res.type.includes("TIME")) {
+           if (conditionMet) {
+             requiredNow = true;
+             logs.push(`${logPrefix} Marked REQUIRED by time window. ${valDesc}`);
+           }
+        } else {
+           if (!conditionUnknown && conditionMet === false) {
+             logs.push(`${logPrefix} REJECTED by requirement ${res.type} (${res.condition || ''}). Details: ${valDesc}`);
+             return { allowed: false, reason: `Unmet requirement ${res.type}`, required: false };
+           }
+        }
+      } else if (res.enforcement === "ALLOWED" || res.enforcement === "ALLOWED_PRIORITY") {
+        hasAllowGate = true;
+        if (conditionMet === true) {
+          allowGateMet = true;
+          logs.push(`${logPrefix} Gate OPENED by ${res.type}. ${valDesc}`);
+        }
+      }
+    }
+  }
+
+  if (hasAllowGate && !allowGateMet) {
+    logs.push(`${logPrefix} REJECTED: Has Allow-Gates but none matched.`);
+    return { allowed: false, reason: "No ALLOWED gate matched", required: false };
+  }
+
+  logs.push(`${logPrefix} ALLOWED. Priority: ${priority}. Required: ${requiredNow}`);
+  return { allowed: true, priority, required: requiredNow };
+}
+
+// --- Prediction --------------------------------------------------------------
+
+// --- Prediction --------------------------------------------------------------
+
+function predictRunways(icao, metar, history, now = new Date()) {
+  const trace = []; // Debug log collector
+  const rIdx = runwayIndexByIcao.get(icao);
+
+  if (!rIdx) {
+    console.warn(`ICAO ${icao} not found in index.`);
+    return { arrivals: [], departures: [], trace };
+  }
+
+  const wIdx = (metar.wind && metar.wind.dir != null) ? metar.wind.dir : metar.wdir;
+  const sIdx = (metar.wind && metar.wind.spd != null) ? metar.wind.spd : metar.wspd;
+  const windDir = (wIdx == null || wIdx === "VRB") ? 0 : Number(wIdx);
+  const windSpd = Number(sIdx || 0);
+
+  trace.push(`METAR Analysis: Wind ${windDir}° @ ${windSpd}kt. Time: ${now.toISOString()}`);
+
+  const arrCandidates = [];
+  const depCandidates = [];
+
+  // NEU: Set, um bereits bearbeitete Runways zu tracken
+  const processedRunways = new Set();
+
+  rIdx.endpoints.forEach(ep => {
+    const des = ep.designator;
+
+    // NEU: Wenn wir diese Runway schon hatten -> überspringen
+    if (processedRunways.has(des)) {
+        return;
+    }
+    processedRunways.add(des);
+
+    const num = parseInt(des.substring(0, 2), 10) * 10;
+
+    // Wind calc
+    const rad = (windDir - num) * (Math.PI / 180);
+    const headwind = Math.cos(rad) * windSpd;
+
+    // Check Ops
+    const arrCheck = checkRexRestriction(icao, des, "landing", { ...metar, wind: { dir: windDir, spd: windSpd } }, now, trace);
+    const depCheck = checkRexRestriction(icao, des, "takeoff", { ...metar, wind: { dir: windDir, spd: windSpd } }, now, trace);
+
+    if (arrCheck.allowed) {
+      const prioBonus = (10 - (arrCheck.priority || 5)) * 15;
+      const totalScore = headwind + prioBonus;
+      trace.push(`  -> ${des} ARR: Score ${totalScore.toFixed(1)} (HW ${headwind.toFixed(1)} + PrioBonus ${prioBonus}). Required: ${arrCheck.required}`);
+      arrCandidates.push({ des, score: totalScore, required: !!arrCheck.required });
+    }
+
+    if (depCheck.allowed) {
+      const prioBonus = (10 - (depCheck.priority || 5)) * 15;
+      const totalScore = headwind + prioBonus;
+      trace.push(`  -> ${des} DEP: Score ${totalScore.toFixed(1)} (HW ${headwind.toFixed(1)} + PrioBonus ${prioBonus}). Required: ${depCheck.required}`);
+      depCandidates.push({ des, score: totalScore, required: !!depCheck.required });
+    }
+  });
+
+  arrCandidates.sort((a, b) => b.score - a.score);
+  depCandidates.sort((a, b) => b.score - a.score);
+
+  // Filter logic for REQUIRED runways
+  if (arrCandidates.some(c => c.required)) {
+    trace.push("  Filtering ARR for REQUIRED runways only.");
+    const req = arrCandidates.filter(c => c.required);
+    arrCandidates.length = 0; arrCandidates.push(...req);
+  }
+  if (depCandidates.some(c => c.required)) {
+    trace.push("  Filtering DEP for REQUIRED runways only.");
+    const req = depCandidates.filter(c => c.required);
+    depCandidates.length = 0; depCandidates.push(...req);
+  }
+
+  // Coherence filter (limit to parallel/near-parallel) AND Deduplication
+  const filterCoherent = (list) => {
+    if (list.length === 0) return [];
+
+    // 1. Primary Heading ermitteln
+    const primary = list[0];
+    const primHdg = parseInt(primary.des.substring(0, 2), 10) * 10;
+
+    // 2. Filtern nach Richtung
+    const headingFiltered = list.filter(c => {
+      const h = parseInt(c.des.substring(0, 2), 10) * 10;
+      let d = Math.abs(primHdg - h);
+      if (d > 180) d = 360 - d;
+      return d < 85;
     });
 
-    // Sortieren und Top-Picks nehmen
-    arrCandidates.sort((a, b) => b.score - a.score);
-    depCandidates.sort((a, b) => b.score - a.score);
+    // 3. Map auf Strings und Slice Top 3 (Da wir oben schon Duplikate beim Einlesen verhindern, reicht das hier)
+    return headingFiltered.slice(0, 3).map(c => c.des);
+  };
 
-    // COHERENCE CHECK: Filter reciprocals (Gegenbahn-Verbot)
-    // Die Runway mit dem höchsten Score definiert die "Flow Direction".
-    // Alle anderen müssen grob in die gleiche Richtung zeigen (< 90° Abweichung).
-    const filterCoherent = (list) => {
-        if (list.length === 0) return [];
-        const primary = list[0]; // Der Gewinner
-        const primHdg = parseInt(primary.des.substring(0, 2), 10) * 10;
+  const bestArr = filterCoherent(arrCandidates);
+  const bestDep = filterCoherent(depCandidates);
 
-        return list.filter(c => {
-            const h = parseInt(c.des.substring(0, 2), 10) * 10;
-            let diff = Math.abs(primHdg - h);
-            if (diff > 180) diff = 360 - diff;
-            // Erlaube parallele (0°) und kreuzende (<90°) Bahnen, aber keine Gegenbahnen (>90°)
-            return diff < 85;
-        }).slice(0, 3).map(c => c.des);
-    };
+  trace.push(`Result: ARR [${bestArr.join(", ")}] DEP [${bestDep.join(", ")}]`);
 
-    const bestArr = filterCoherent(arrCandidates);
-    const bestDep = filterCoherent(depCandidates);
+  if (typeof console !== 'undefined' && console.groupCollapsed && console.table) {
+      console.groupCollapsed(`✈️ Runway Prediction Debug: ${icao}`);
+      console.log(`Input METAR Wind: ${windDir}° / ${windSpd}kt`);
+      console.table(trace);
+      console.log("Calculated Arrivals:", bestArr);
+      console.log("Calculated Departures:", bestDep);
+      console.groupEnd();
+  }
 
-    console.log(`RWY PRED ${icao} (Rex Rules):`, { arr: bestArr, dep: bestDep });
-    return {
-        arrivals: bestArr,
-        departures: bestDep,
-        isPrediction: true
-    };
+  return { arrivals: bestArr, departures: bestDep, trace };
 }
+
+  /********************
+   * Info Modal Logic
+   ********************/
+  function handleInfoModal() {
+    const overlay = document.getElementById("infoModalOverlay");
+    if(!overlay) return;
+
+    const currentVersion = overlay.dataset.version;
+    const savedVersion = localStorage.getItem("vatsimFids_infoVersionSeen");
+
+    if(savedVersion === currentVersion) {
+      overlay.style.display = "none";
+      return;
+    }
+    overlay.classList.add("show");
+
+    const closeAction = () => {
+      if(document.getElementById("infoDontShowAgain").checked) {
+        localStorage.setItem("vatsimFids_infoVersionSeen", currentVersion);
+      }
+      overlay.classList.remove("show");
+    };
+
+    document.getElementById("infoModalCloseTop").addEventListener("click", closeAction);
+    document.getElementById("infoModalCloseBtn").addEventListener("click", closeAction);
+  }
 
 async function updateAirportRunwayInfo(atisList = []) {
     // 1. Laden der Caches
@@ -2130,7 +2491,7 @@ async function updateAirportRunwayInfo(atisList = []) {
         const cachedRwy = rwyCache[icao]?.current;
         if (cachedRwy) {
             globalActiveRunways[icao] = cachedRwy;
-            renderRunwayInfo(icao, cachedRwy, cachedRwy.atisCode || null);
+            renderRunwayInfo(icao, cachedRwy, cachedRwy.atisCode || null, metarCache[icao]?.metar);
         } else {
             // Nur Spinner zeigen, wenn wir wirklich NICHTS haben
             if (icao === settings.activeTab) renderLoadingRunways(icao);
@@ -2235,9 +2596,28 @@ async function updateAirportRunwayInfo(atisList = []) {
             rwyDirty = true;
 
         } else {
-            // Keine ATIS -> Reiner Prediction Fallback
-            if (mData && !settings.hidePredictiveRunways) {
-                        console.log(`RWY DEBUG ${icao}: No ATIS, trying prediction...`);
+            // Keine ATIS vorhanden
+            if (settings.hidePredictiveRunways) {
+                // FALL A: Prediction deaktiviert -> Hinweis anzeigen
+                if (icao === settings.activeTab) {
+                    const el = document.getElementById("globalRunways");
+                    if (el) {
+                        el.className = "runwayGlobal";
+                        el.innerHTML = `<span style="opacity:0.5; font-size:11px; font-family:var(--font-mono); border:1px solid rgba(255,255,255,0.1); padding:2px 6px; border-radius:4px;">${t('runway_pred_hidden')}</span>`;
+                        el.removeAttribute("title");
+                    }
+                    // METAR trotzdem rendern (wird sonst von renderRunwayInfo gemacht)
+                    const mEl = document.getElementById("globalMetar");
+                    if (mEl && mData?.metar) {
+                        let txt = mData.metar;
+                        if (txt.includes("RMK")) txt = txt.split("RMK")[0].trim();
+                        mEl.textContent = txt;
+                        mEl.title = mData.metar;
+                    }
+                }
+            } else if (mData) {
+                // FALL B: Prediction aktiv -> Berechnen
+                console.log(`RWY DEBUG ${icao}: No ATIS, trying prediction...`);
                 await ensureRunwayIndexForIcao(icao).catch(()=>{});
                 const pred = predictRunways(icao, mData, rwyCache[icao]?.history);
                 if (pred) {
@@ -2246,7 +2626,6 @@ async function updateAirportRunwayInfo(atisList = []) {
                         departures: pred.departures,
                         source: "PRED"
                     };
-                    // Cache auch Prediction
                     if (!rwyCache[icao]) rwyCache[icao] = { history: [] };
                     rwyCache[icao].current = { ...rwyInfo, ts: now, atisCode: null };
                 }
@@ -2256,7 +2635,7 @@ async function updateAirportRunwayInfo(atisList = []) {
         // UI Update für jeden Airport
         if (rwyInfo) {
             globalActiveRunways[icao] = rwyInfo;
-            renderRunwayInfo(icao, rwyInfo, atisCode);
+            renderRunwayInfo(icao, rwyInfo, atisCode, mData?.metar);
         }
     } // end for
 
@@ -2276,18 +2655,15 @@ function renderLoadingRunways(icao) {
     }
 }
 
-function renderRunwayInfo(icao, info, atisCode) {
-    // 1. ATIS Letter im Tab/Input updaten (Hack: wir suchen den Input, wenn es nur einen gibt, oder die Tabs)
-    // Update Active Tab Text
+function renderRunwayInfo(icao, info, atisCode, metarRaw) {
+    // 1. ATIS Letter im Tab updaten (unverändert)
     const tabs = document.querySelectorAll(".airportTab");
     tabs.forEach(t => {
          const code = t.dataset.icao;
          if(code === icao) {
-             // Nur DOM anfassen wenn nötig
              const oldBadge = t.querySelector(".atisBadge");
               if(atisCode) {
                  const badgeHtml = ` <span class="badge atisBadge info" style="padding:1px 4px; font-size:9px; vertical-align:middle; background:var(--primary); color:#000; border-radius:2px;">${atisCode}</span>`;
-                 // Strict check to avoid re-parsing innerHTML breaking event listeners
                  if(!oldBadge) t.insertAdjacentHTML("beforeend", badgeHtml);
                  else if(oldBadge.textContent !== atisCode) oldBadge.textContent = atisCode;
              } else {
@@ -2296,42 +2672,80 @@ function renderRunwayInfo(icao, info, atisCode) {
         }
     });
 
-    // 2. Global Header Runways (NUR update wenn dies der aktive Tab ist!)
+    // 2. Global Header Runways & METAR
     if (icao === settings.activeTab) {
         const container = document.getElementById("globalRunways");
+        const metarEl = document.getElementById("globalMetar");
+
+        // METAR setzen
+        if(metarEl) {
+            let mText = metarRaw || "No METAR available";
+            // Optional: RMK abschneiden für saubere Optik
+            if(mText.includes("RMK")) mText = mText.split("RMK")[0].trim();
+            metarEl.textContent = mText;
+            metarEl.title = metarRaw || ""; // Full text on hover
+        }
+
+        // Sidebar METAR Sync
+        if(sidebarMetar) {
+            sidebarMetar.textContent = metarRaw || "No METAR available";
+        }
+
         if (!container) return;
+
+        const isPrediction = info && (info.source || "").includes("PRED");
+
+        if (isPrediction && settings.hidePredictiveRunways) {
+            container.className = "runwayGlobal";
+            container.innerHTML = `<span style="opacity:0.5; font-size:11px; font-family:var(--font-mono); border:1px solid rgba(255,255,255,0.1); padding:2px 6px; border-radius:4px;">${t('runway_pred_hidden')}</span>`;
+            container.removeAttribute("title");
+            return; // Rendering hier beenden
+        }
 
         if (info && (Array.isArray(info.arrivals) || Array.isArray(info.departures))) {
             const depStr = info.departures.join(", ");
             const arrStr = info.arrivals.join(", ");
 
-            const depLabel = (info.departures.length > 1) ? "DEP RWYS" : "DEP RWY";
-            const arrLabel = (info.arrivals.length > 1) ? "ARR RWYS" : "ARR RWY";
+            const depLabel = (info.departures.length > 1) ? "DEP" : "DEP";
+            const arrLabel = (info.arrivals.length > 1) ? "ARR" : "ARR";
 
             const isPred = (info.source || "").includes("PRED");
 
-            container.className = isPred ? "runwayGlobal pred" : "runwayGlobal atis";
+            // --- REPARATUR: Tooltip wiederherstellen ---
             container.title = isPred ? "Prognose basierend auf Wind (Keine ATIS)" : "Aktive Runways laut ATIS";
+            // -------------------------------------------
+
+            container.className = isPred ? "runwayGlobal pred" : "runwayGlobal atis";
 
             const icon = isPred
-                ? `<span style="color:var(--warn); margin-right:4px;">⚠</span>`
-                : `<span style="color:var(--info); margin-right:4px; font-size:1.1em;">🛈</span>`;
+                ? `<span style="color:var(--warn); margin-right:6px; font-size:14px;">⚠</span>`
+                : `<span style="color:var(--info); margin-right:6px; font-size:14px;">🛈</span>`;
 
-            // Stable Update: innerHTML replace is fine here because this container is NOT redrawn by board refresh loops
+            // Sidebar Content Sync
+            if(sidebarRunways) {
+                sidebarRunways.innerHTML = `
+                  <div style="display:flex; flex-direction:column; gap:10px;">
+                    <div class="runwayGroup"><span class="lbl">DEP</span><span class="val">${depStr || "—"}</span></div>
+                    <div class="runwayGroup"><span class="lbl">ARR</span><span class="val">${arrStr || "—"}</span></div>
+                  </div>`;
+            }
+
             container.innerHTML = `
-                ${icon}
-                <div class="runwayGroup">
-                    <span class="lbl">${depLabel}</span>
-                    <span class="val">${depStr || "—"}</span>
-                </div>
-                <div class="runwayGroup">
-                    <span class="lbl">${arrLabel}</span>
-                    <span class="val">${arrStr || "—"}</span>
+                <div class="runwayRow">
+                    ${icon}
+                    <div class="runwayGroup">
+                        <span class="lbl">${depLabel}</span>
+                        <span class="val">${depStr || "—"}</span>
+                    </div>
+                    <div class="runwayGroup">
+                        <span class="lbl">${arrLabel}</span>
+                        <span class="val">${arrStr || "—"}</span>
+                    </div>
                 </div>
             `;
         } else {
             container.innerHTML = "";
-
+            container.removeAttribute("title");
         }
     }
 }
@@ -2413,6 +2827,8 @@ function saveGateFlightCache(obj){
 try {
     // Drosselung: Nur alle 10 Sekunden in DB schreiben, um SQL-Server zu schonen
     if (DB_CONFIG.enabled && (!window._lastDbGateSave || Date.now() - window._lastDbGateSave > 10000)) {
+       // Optimization: Don't save empty objects if not necessary (though usually we have data)
+       if (Object.keys(obj).length === 0) return;
        dbSave(GATE_FLIGHT_CACHE_KEY, obj).then(ok => { if(ok) pruneLocalIfDbActive(GATE_FLIGHT_CACHE_KEY); });
        window._lastDbGateSave = Date.now();
     } else if (!DB_CONFIG.enabled) {
@@ -3358,7 +3774,7 @@ out geom;
       // Save Cache
       cache[icao] = { ts: Date.now(), zones };
       saveHotZoneCache(cache);
-
+          console.log(`[HOTZONE LOAD] ${icao}: Loaded ${zones.length} zones.`);
       return zones;
     })();
 
@@ -3871,10 +4287,10 @@ out geom tags;
     return { dNow, axisLat, metric };
   }
 
-  // For ETD display: avoid "rounding up" into +2..3 minutes when very close to line-up.
-  // Strategy: floor to minute of predicted time, but never show the current minute (prevents "past-looking" times).
-  function etdDisplayMinuteTs(ts, now=Date.now()){
+  // CHANGED: Now returns raw ms if raw=true, logic moved mostly to display time
+  function etdDisplayMinuteTs(ts, now=Date.now(), raw=false){
     if(ts == null || !isFinite(ts)) return null;
+    if(raw) return ts; // Return raw ms for smoothing algos
     const nowMin  = Math.floor(now / MIN_MS) * MIN_MS;
     const candMin = Math.floor(ts  / MIN_MS) * MIN_MS;
     return (candMin <= nowMin) ? (nowMin + MIN_MS) : candMin;
@@ -3905,107 +4321,212 @@ out geom tags;
     return { alongM, lateralM, t, lenM };
   }
 
-  // NEW: Detect approach runway for arriving flights (Cone/Corridor logic)
-  function resolveArrivalRunwayForFlight(p, runwayIndex, activeRunways, distNm, elevation=0){
-    if(!p || !runwayIndex || !runwayIndex.endpoints) return null;
+/**
+ * 3D Anflug-Analyse
+ * Prüft Lateral (Localizer) und Vertikal (Glideslope 3°)
+ * Returns: { score: 0..100, distToThr: number, isEstablished: boolean }
+ */
+function calculateApproachQuality(p, rwyEp, otherEp, runwayIdx) {
+    if (!p || !rwyEp || !otherEp) return null;
+
     const lat = Number(p.latitude);
     const lon = Number(p.longitude);
+    const alt = Number(p.altitude);
+    // Elevation holen (Fallback 0)
+    const elev = (currentAirportIcao && airportIndex.byIcao.get(currentAirportIcao)?.elevation) || 0;
+    const agl = alt - elev;
+
+    // 1. Projektion auf Centerline (Verlängerte Piste)
+    const proj = projectToRunwayAxisMeters(lat, lon, rwyEp.lat, rwyEp.lon, otherEp.lat, otherEp.lon);
+    if (!proj) return null;
+
+    // t < 0 bedeutet "vor der Schwelle" (im Anflug). t > 0 bedeutet "auf der Piste/dahinter".
+    // Wir betrachten nur Anflüge (t < 0.05 für Short Final Tolerance)
+    if (proj.t > 0.05) return null;
+
+    // Distanz zur Schwelle (entlang der Centerline)
+    const distM = Math.abs(proj.alongM);
+    const distNm = distM * 0.000539957;
+
+    if (distNm > 25) return null; // Zu weit weg für präzisen Trichter
+
+    // --- A. LATERAL CHECK (Der Trichter) ---
+    // Der Localizer wird zur Piste hin schmaler.
+    // Bei 10NM erlauben wir ca. 1.5NM Abweichung, bei 1NM nur noch 0.2NM.
+    const maxLatDevM = 300 + (distM * 0.08);
+    if (proj.lateralM > maxLatDevM) return null; // Außerhalb des Trichters
+
+    // --- B. VERTICAL CHECK (3° Glideslope) ---
+    // Ideale Höhe: 318ft pro NM (tan(3°) * 6076ft)
+    const idealAgl = distNm * 318;
+
+    // Toleranz: Wir erlauben, dass man "unter" dem Glideslope ist (Level Segment vor Intercept)
+    // oder leicht darüber. Aber nicht 3000ft zu hoch.
+    const deltaAlt = agl - idealAgl;
+
+    // "Capture Region": Man fängt den Glideslope oft von unten ein.
+    // Zu hoch (> +1500ft) ist schlecht (Go-Around Gefahr).
+    // Zu tief (> -2000ft) ist okay, solange man nicht crasht (Level Flight vor Intercept).
+    let vertScore = 0;
+    if (deltaAlt > 1500) vertScore = 100; // Viel zu hoch
+    else if (deltaAlt > 500) vertScore = (deltaAlt - 500) / 10; // Leicht zu hoch
+    else if (deltaAlt < -2500) vertScore = Math.abs(deltaAlt + 2500) / 20; // Viel zu tief
+    else vertScore = 0; // Perfekt oder im Capture-Bereich
+
+    // --- C. HEADING CHECK ---
+    const rwyHdg = bearingDeg(rwyEp.lat, rwyEp.lon, otherEp.lat, otherEp.lon);
     const trk = Number(p.heading || 0);
-    const alt = Number(p.altitude || 0);
-    if(!isFinite(lat) || !isFinite(lon)) return null;
+    let align = Math.abs(trk - rwyHdg);
+    if (align > 180) align = 360 - align;
 
-    // Only relevant for airborne arrivals near the airport
-    const dNm = distNm;
-    if(!isFinite(dNm) || dNm > 25) return null; // 25NM lookup radius
+    // Intercept Winkel: Je weiter weg, desto steiler darf der Winkel sein (30-45° Intercept)
+    const maxAlign = (distNm > 10) ? 60 : (distNm > 5 ? 45 : 20);
+    if (align > maxAlign) return null;
 
-    // Performance Optimization: Skip logic if aircraft is > 5000ft AGL (Above Ground Level)
-    // This avoids false positives for overflights or high approach transitions.
-    if((alt - elevation) > 5000) return null;
+    // --- SCORE BERECHNUNG (Niedriger ist besser) ---
+    // Mix aus Lateraler Abweichung, Vertikaler Abweichung und Winkel
+    let score =
+        (proj.lateralM / maxLatDevM) * 30 +  // Lateral: max 30 Pkt
+        (align / maxAlign) * 20 +            // Heading: max 20 Pkt
+        vertScore;                           // Vertikal: variabel
 
+    // Established Bonus: Wenn wir sehr nah an Idealwerten sind
+    const isEstablished = (score < 25 && distNm < 15);
 
-    // DEBUG: Enable via console: window.RWY_DEBUG = true
-    const debug = (window.RWY_DEBUG === true || (window.RWY_DEBUG_CALLSIGN && p.callsign === window.RWY_DEBUG_CALLSIGN));
+    return {
+        score,
+        distNm,
+        isEstablished,
+        designator: rwyEp.designator
+    };
+}
 
-    // Prepare Candidate List for Tiered Selection
-    const candidates = [];
+/**
+ * 3D Anflug-Analyse
+ * Prüft Lateral (Localizer) und Vertikal (Glideslope 3°)
+ * Returns: { score: 0..100, distToThr: number, isEstablished: boolean }
+ */
+function calculateApproachQuality(p, rwyEp, otherEp, runwayIdx) {
+    if (!p || !rwyEp || !otherEp) return null;
 
-    const activeSet = new Set(activeRunways?.arrivals || []);
+    const lat = Number(p.latitude);
+    const lon = Number(p.longitude);
+    const alt = Number(p.altitude);
+    // Elevation holen (Fallback 0)
+    const elev = (currentAirportIcao && airportIndex.byIcao.get(currentAirportIcao)?.elevation) || 0;
+    const agl = alt - elev;
 
-    // Check if the active runways come from Prediction (lower priority than ATIS)
-    const isPrediction = (activeRunways?.source || "").includes("PRED");
+    // 1. Projektion auf Centerline (Verlängerte Piste)
+    const proj = projectToRunwayAxisMeters(lat, lon, rwyEp.lat, rwyEp.lon, otherEp.lat, otherEp.lon);
+    if (!proj) return null;
 
+    // t < 0 bedeutet "vor der Schwelle" (im Anflug). t > 0 bedeutet "auf der Piste/dahinter".
+    // Wir betrachten nur Anflüge (t < 0.05 für Short Final Tolerance)
+    if (proj.t > 0.05) return null;
+
+    // Distanz zur Schwelle (entlang der Centerline)
+    const distM = Math.abs(proj.alongM);
+    const distNm = distM * 0.000539957;
+
+    if (distNm > 25) return null; // Zu weit weg für präzisen Trichter
+
+    // --- A. LATERAL CHECK (Der Trichter) ---
+    // Der Localizer wird zur Piste hin schmaler.
+    // Bei 10NM erlauben wir ca. 1.5NM Abweichung, bei 1NM nur noch 0.2NM.
+    const maxLatDevM = 300 + (distM * 0.08);
+    if (proj.lateralM > maxLatDevM) return null; // Außerhalb des Trichters
+
+    // --- B. VERTICAL CHECK (3° Glideslope) ---
+    // Ideale Höhe: 318ft pro NM (tan(3°) * 6076ft)
+    const idealAgl = distNm * 318;
+
+    // Toleranz: Wir erlauben, dass man "unter" dem Glideslope ist (Level Segment vor Intercept)
+    // oder leicht darüber. Aber nicht 3000ft zu hoch.
+    const deltaAlt = agl - idealAgl;
+
+    // "Capture Region": Man fängt den Glideslope oft von unten ein.
+    // Zu hoch (> +1500ft) ist schlecht (Go-Around Gefahr).
+    // Zu tief (> -2000ft) ist okay, solange man nicht crasht (Level Flight vor Intercept).
+    let vertScore = 0;
+    if (deltaAlt > 1500) vertScore = 100; // Viel zu hoch
+    else if (deltaAlt > 500) vertScore = (deltaAlt - 500) / 10; // Leicht zu hoch
+    else if (deltaAlt < -2500) vertScore = Math.abs(deltaAlt + 2500) / 20; // Viel zu tief
+    else vertScore = 0; // Perfekt oder im Capture-Bereich
+
+    // --- C. HEADING CHECK ---
+    const rwyHdg = bearingDeg(rwyEp.lat, rwyEp.lon, otherEp.lat, otherEp.lon);
+    const trk = Number(p.heading || 0);
+    let align = Math.abs(trk - rwyHdg);
+    if (align > 180) align = 360 - align;
+
+    // Intercept Winkel: Je weiter weg, desto steiler darf der Winkel sein (30-45° Intercept)
+    const maxAlign = (distNm > 10) ? 60 : (distNm > 5 ? 45 : 20);
+    if (align > maxAlign) return null;
+
+    // --- SCORE BERECHNUNG (Niedriger ist besser) ---
+    // Mix aus Lateraler Abweichung, Vertikaler Abweichung und Winkel
+    let score =
+        (proj.lateralM / maxLatDevM) * 30 +  // Lateral: max 30 Pkt
+        (align / maxAlign) * 20 +            // Heading: max 20 Pkt
+        vertScore;                           // Vertikal: variabel
+
+    // Established Bonus: Wenn wir sehr nah an Idealwerten sind
+    const isEstablished = (score < 25 && distNm < 15);
+
+    return {
+        score,
+        distNm,
+        isEstablished,
+        designator: rwyEp.designator
+    };
+}
+
+function resolveArrivalRunwayForFlight(f, runwayIndex, activeRunways, distNm, elevation=0){
+    const p = f.pilot;
+    if(!p || !runwayIndex || !runwayIndex.endpoints) return null;
+
+    let bestMatch = null;
+    let bestScore = 999;
+
+    // 1. Alle Endpunkte prüfen
     for(const ep of runwayIndex.endpoints){
-        // Find opposite end (Stop End) to determine runway geometry
         const other = runwayIndex.endpoints.find(e => e.wayId === ep.wayId && e.epId !== ep.epId);
         if(!other) continue;
 
-        // 1. Heading Check: Bearing FROM Threshold (Ep) TO Stop End (Other)
-        // This represents the true landing heading.
-        const rwyHdg = bearingDeg(ep.lat, ep.lon, other.lat, other.lon);
-        const align = angleDiffDeg(trk, rwyHdg);
-        // Allow up to 60deg intercept at distance, tightening to 30deg close in (<5NM)
-        const maxAlign = dNm < 5 ? 10 : 15;
-        if(align > maxAlign) {
-            if(debug) console.log(`[RWY-DBG] ${p.callsign} skip ${ep.designator}: align ${Math.round(align)} > ${maxAlign}`);
-            continue;
+        const quality = calculateApproachQuality(p, ep, other, runwayIndex);
+
+        if (quality) {
+            // Bevorzuge aktive Runways massiv (Score Bonus)
+            let finalScore = quality.score;
+            const isActive = activeRunways?.arrivals?.includes(ep.designator);
+            if (!isActive) finalScore += 50; // Strafe für inaktive Pisten
+
+            if (finalScore < bestScore) {
+                bestScore = finalScore;
+                bestMatch = { ep, ...quality };
+            }
         }
-
-        // 2. Projection Check (Project P onto line A->B where A=Threshold, B=StopEnd)
-        // t=0 is Threshold, t=1 is StopEnd.
-        // Aircraft on final approach will have t < 0. Aircraft rolling out t > 0.
-        const proj = projectToRunwayAxisMeters(lat, lon, ep.lat, ep.lon, other.lat, other.lon);
-        if(!proj) continue;
-
-        // Filter: Reject if clearly "past" the runway (missed approach/overflown)
-        // t=0 is Threshold, t=1 is Stop End. We accept anything < 0.9 (approaching or rolling out).
-        if(proj.t > 0.9) {
-             if(debug) console.log(`[RWY-DBG] ${p.callsign} skip ${ep.designator}: past rwy t=${proj.t.toFixed(2)}`);
-             continue;
-        }
-
-        // VATSIM Tollerance: Much wider cone to catch visual approaches and sloppy intercepts.
-        // Base: 900m (allows ~0.5NM deviation at threshold).
-        // Spread: 20% of distance (allows wide funnel).
-        const distToThrM = haversineMeters(lat, lon, ep.lat, ep.lon);
-        const allowedLatM = 900 + (distToThrM * 0.20);
-
-        if(proj.lateralM > allowedLatM) {
-             if(debug) console.log(`[RWY-DBG] ${p.callsign} skip ${ep.designator}: lat ${Math.round(proj.lateralM)} > ${Math.round(allowedLatM)} (DistThr: ${Math.round(distToThrM)})`);
-             continue;
-        }
-
-        // 3. Scoring
-        // Lower score is better.
-        let score = proj.lateralM + (align * 20);
-
-        // Determine Priority Tier:
-        // Tier 1: Active Runway (Confirmed via ATIS)
-        // Tier 2: Active Runway (Predicted)
-        // Tier 3: Inactive Runway (Fallback)
-        let tier = 3;
-        if(activeSet.has(ep.designator)){
-            tier = isPrediction ? 2 : 1;
-        }
-
-        candidates.push({ ep, score, tier, debugInfo: `Tier ${tier} Score ${Math.round(score)}` });
     }
 
-        //if(debug) console.log(`[RWY-DBG] ${p.callsign} cand ${ep.designator} score=${Math.round(score)}`);
+    // 2. Queue Management
+    if (bestMatch) {
+        p.__isEstablished = bestMatch.isEstablished; // Store for classifyFlight status logic
+    }	
+    if (bestMatch && bestMatch.isEstablished) {
+        // Flug in die Queue für diese Piste eintragen
+        const rwyKey = normalizeRunwayDesignator(bestMatch.designator);
+        if (!runwayQueues.has(rwyKey)) runwayQueues.set(rwyKey, []);
 
-        +    // Sort: First by Tier (ascending), then by Score (ascending)
-    candidates.sort((a,b) => {
-        if(a.tier !== b.tier) return a.tier - b.tier; // Priority to lower tier
-        return a.score - b.score; // Break ties with geometry score
-    });
+        // Wir speichern Referenzen, um später Abstände zu prüfen
+        runwayQueues.get(rwyKey).push({
+            id: f.id,
+            distNm: bestMatch.distNm,
+            gs: Number(p.groundspeed)
+        });
+    }
 
-    if(candidates.length > 0){
-        const best = candidates[0];
-        if(debug) console.log(`[RWY-DBG] ${p.callsign} WINNER -> ${best.ep.designator} (${best.debugInfo})`);
-        return best.ep;
-     }
-
-return null;
-  }
+    return bestMatch ? bestMatch.ep : null;
+}
 
   function intersectionHintFromRemarks(focusIcao, remarks){
     const r = String(remarks || "").toUpperCase();
@@ -4093,6 +4614,124 @@ return null;
 
     return bestApproach || bestAny;
   }
+
+/**
+ * Hauptfunktion: Bestimmt die Anzeige (ft oder FL) basierend auf Position und Flugverhalten.
+ * WICHTIG: 'latitude' muss jetzt als Parameter übergeben werden!
+ */
+function getSmartAltitude(altitude, qnhHg, latitude, longitude, isLevelFlight) {
+    altitude = Number(altitude);
+    qnhHg = Number(qnhHg);
+    latitude = Number(latitude);
+    longitude = Number(longitude);
+
+    // 1. SAFETY & BODEN
+    if (!isFinite(altitude)) return "—";
+    if (altitude < 3000) return Math.round(altitude) + " ft";
+
+    // 2. HARD LIMIT (Weltweit)
+    // Über 18.000 ft fliegen 99% der Welt Flight Level.
+    // Das spart Rechenzeit für die bounding boxes.
+    if (altitude >= 18000) return calculateFlightLevelString(altitude, qnhHg);
+
+    // 3. REGIONALE TRANSITION ALTITUDE ERMITTELN
+    // Wir holen uns den Grenzwert für den aktuellen Ort (z.B. 5000, 10000, 14000)
+    const localTA = getRegionTransitionAltitude(latitude, longitude);
+
+    // 4. MATH-CHECK (Der "Detektiv")
+    // Wenn das Flugzeug stabil fliegt (Level Flight), prüfen wir, ob die Zahl "glatt" ist.
+    // Dieser Check hat Vorrang vor der Geografie, da er Pilotenfehler (vergessenes Umschalten) aufdeckt.
+    if (isLevelFlight && isFinite(qnhHg)) {
+        const detectedMode = detectPressureSetting(altitude, qnhHg);
+        
+        if (detectedMode === "STD") {
+            return calculateFlightLevelString(altitude, qnhHg);
+        } else if (detectedMode === "QNH") {
+            return Math.round(altitude) + " ft";
+        }
+        // Wenn "UNK" (unklar), fallen wir weiter zur Geografie-Regel
+    }
+
+    // 5. GEOGRAFIE-LOGIK (Fallback)
+    // Wenn wir steigen/sinken oder der Math-Check unsicher war:
+    // Wir vergleichen einfach mit der lokalen Transition Altitude.
+    
+    // Puffer von 500ft, um Flackern genau an der Grenze zu vermeiden
+    if (altitude > (localTA + 500)) {
+        return calculateFlightLevelString(altitude, qnhHg);
+    } else {
+        return Math.round(altitude) + " ft";
+    }
+}
+
+/**
+ * Datenbank der Transition Altitudes (Bounding Boxes)
+ */
+function getRegionTransitionAltitude(lat, lon) {
+    // A. NORDAMERIKA (USA & Kanada) -> TA 18.000 ft
+    if (lat >= 24.0 && lat <= 85.0 && lon >= -178.0 && lon <= -50.0) {
+        return 18000;
+    }
+
+    // B. JAPAN -> TA 14.000 ft
+    if (lat >= 22.0 && lat <= 46.0 && lon >= 122.0 && lon <= 154.0) {
+        return 14000;
+    }
+
+    // C. AUSTRALIEN -> TA 10.000 ft
+    if (lat >= -45.0 && lat <= -10.0 && lon >= 110.0 && lon <= 155.0) {
+        return 10000;
+    }
+
+    // D. NEUSEELAND -> TA 13.000 ft
+    if (lat >= -48.0 && lat <= -33.0 && lon >= 165.0 && lon <= 180.0) {
+        return 13000;
+    }
+
+    // E. SÜDOSTASIEN (Thailand/Hong Kong/Taiwan Mix) -> ca. 11.000 ft
+    // Grobe Box für den Raum
+    if (lat >= 5.0 && lat <= 26.0 && lon >= 97.0 && lon <= 123.0) {
+        return 11000;
+    }
+
+    // F. DEFAULT (Europa, Afrika, Südamerika, Russland)
+    // Hier ist TA meist niedrig (3000 - 6000). 
+    // Wir nehmen 5000 als sicheren Standard.
+    return 5000;
+}
+
+/**
+ * Erkennt mathematisch, ob auf STD oder QNH geflogen wird.
+ */
+function detectPressureSetting(altitude, qnhHg) {
+    const stdPressure = 29.92;
+    const flightLevelAlt = altitude + (stdPressure - qnhHg) * 1000;
+
+    // Modulo-Analyse
+    const diffQNH = Math.abs(altitude % 100);
+    const devQNH = Math.min(diffQNH, 100 - diffQNH);
+
+    const diffFL = Math.abs(flightLevelAlt % 100);
+    const devFL = Math.min(diffFL, 100 - diffFL);
+
+    // Toleranz: 25 Fuß Abweichung erlaubt
+    const isCleanFL = devFL < 25;
+    const isCleanQNH = devQNH < 25;
+
+    if (isCleanFL && !isCleanQNH) return "STD";
+    if (!isCleanFL && isCleanQNH) return "QNH";
+    return "UNK";
+}
+
+/**
+ * Formatiert Flight Level String (FLxxx)
+ */
+function calculateFlightLevelString(altitude, qnhHg) {
+    if (!qnhHg || !isFinite(qnhHg)) qnhHg = 29.92;
+    let pressureAlt = altitude + (29.92 - qnhHg) * 1000;
+    let fl = Math.round(pressureAlt / 100);
+    return "FL" + fl;
+}
 
   function resolveRunwayTargetForCid(cid, lat, lon, runwayIdx, activeRunways){
     cid = String(cid);
@@ -4489,13 +5128,14 @@ return null;
         this.inFlight = 1;
         try{
           const res = await item.fn();
-          this.lastRequestAt = Date.now();
-          if(this.storageKey) localStorage.setItem(this.storageKey, String(this.lastRequestAt));
           item.resolve(res);
         }catch(e){
+          console.warn("API Fail (iOS/Mobile check):", e); // Debugging-Hilfe
           if(e && e.__rateLimited) this.backoffUntil = Date.now() + 60000;
           item.reject(e);
         }finally{
+          this.lastRequestAt = Date.now();
+          if(this.storageKey) try{ localStorage.setItem(this.storageKey, String(this.lastRequestAt)); }catch(e){}
           this.inFlight = 0;
         }
       }
@@ -5017,6 +5657,8 @@ return null;
 
   function saveEtdCache(){
     if(!etdCacheDirty) return;
+    // Optimization: Don't save empty cache
+    if (Object.keys(etdCacheData).length === 0) return;
     if (DB_CONFIG.enabled) {
         dbSave(ETD_PERSIST_KEY, etdCacheData).then(ok => { if(ok) pruneLocalIfDbActive(ETD_PERSIST_KEY); });
     } else {
@@ -5154,6 +5796,49 @@ return null;
         pruneLocalFlightMem();
   }
 
+  // DEBUGGING UTILS
+  let isDebugRecording = false;
+  let debugBuffer = [];
+
+  function logCalcDebug(type, cid, callsign, inputs, output) {
+      if(!isDebugRecording) return;
+      debugBuffer.push({
+          type,
+          cid,
+          callsign,
+          ts: Date.now(),
+          inputs: JSON.parse(JSON.stringify(inputs)), // Deep copy snapshot
+          output
+      });
+  }
+
+  async function flushDebugLog() {
+      if(!isDebugRecording || debugBuffer.length === 0) return;
+      const payload = JSON.stringify(debugBuffer);
+      debugBuffer = []; // Clear local
+
+      try {
+          await fetch('?', {
+              method: 'POST',
+              headers: {'Content-Type': 'application/x-www-form-urlencoded'},
+              body: 'action=save_debug&data=' + encodeURIComponent(payload)
+          });
+          console.log("Debug log flushed to server.");
+      } catch(e) {
+          console.warn("Debug flush failed", e);
+      }
+  }
+
+  if(debugToggleBtn){
+      debugToggleBtn.addEventListener("click", () => {
+          isDebugRecording = !isDebugRecording;
+          debugToggleBtn.classList.toggle("debug-active", isDebugRecording);
+          if(!isDebugRecording) {
+              flushDebugLog(); // Flush remaining on stop
+          }
+      });
+  }
+
   // For taxiing departures: runway-threshold based ETD:
   //   remaining = (distance_to_threshold / avg_taxi_speed) + lineup_buffer + queue_delay
   function computeEtdForTaxi(stdTs, now=Date.now(), flight=null){
@@ -5284,13 +5969,23 @@ return null;
         const closeBonus = (!hasAhead && stopped && isFinite(distUsedM) && distUsedM <= 80) ? -8 : 0;
         const sec = Math.max(10, physicsSec + (q?.delaySec || 0) + closeBonus);
 
-        // Use ETD-specific minute handling (prevents +2..3min artifacts near line-up)
-        predicted = etdDisplayMinuteTs(now + sec * 1000, now);
+        // Return raw ms for stabilizer! Don't round yet.
+        predicted = now + sec * 1000;
 
         // Apply Rapid Roll Cap
         if(flight.__rapidRunwayRoll){
            predicted = Math.min(predicted, flight.__rapidRunwayRoll);
         }
+        logCalcDebug("ETD_PHYSICS", flight.cid, flight.callsign, {
+            distUsedM,
+            taxiKts,
+            speedMps,
+            bufSec,
+            startupExtraSec,
+            queueDelay: q?.delaySec,
+            historicalMs,
+            taxiAgeSec
+        }, predicted);
       }
     }
 
@@ -5323,8 +6018,11 @@ return null;
 
       const earlyRoll = (taxiAgeSec > 0 && taxiAgeSec < 110) || (!!tm && !tm.taxiConfirmedAt && gsNow >= 2 && gsNow < 14);
       if(earlyRoll && !allowShortEarly){
-        const trafficMin = estimateTaxiMinutesForFlight(flight);
-        const trafficFloorTs = etdDisplayMinuteTs(now + trafficMin * MIN_MS, now);
+        // FIX: Calculate precise traffic floor based on distance, not rounded minutes
+        // Use default speed of ~15kts (approx 7.7 m/s) if actual speed is erratic
+        const distForFloor = (!tm?.taxiConfirmedAt && flight.rwTaxiDistM) ? flight.rwTaxiDistM : (flight.rwDistM || 2000);
+        const floorSec = (distForFloor / 7.0) + 60; // Distance / Speed + Buffer
+        const trafficFloorTs = now + (floorSec * 1000);
 
         // Minimal lead: pushback / uncertain intent should never show "immediate" ETD.
         let floorLeadMs = (gsNow < 9) ? (4 * MIN_MS) : (3 * MIN_MS);
@@ -5332,9 +6030,17 @@ return null;
         if((!tm?.taxiConfirmedAt && taxiAgeSec < 90) || (isFinite(d) && d < 0.45 && taxiAgeSec < 90)){
           floorLeadMs = Math.max(floorLeadMs, 6 * MIN_MS);
         }
-        const hardFloorTs = etdDisplayMinuteTs(now + floorLeadMs, now);
+        const hardFloorTs = now + floorLeadMs;
 
         predicted = Math.max(predicted, trafficFloorTs, hardFloorTs);
+
+        logCalcDebug("ETD_EARLY_FLOOR", flight?.cid, flight?.callsign, {
+            rawPredicted: predicted,
+            trafficMin: floorSec / 60, // KORRIGIERT: Variable definieren
+            trafficFloorTs,
+            hardFloorTs,
+            gsNow
+        }, predicted);
       }
     }
 
@@ -5343,7 +6049,8 @@ return null;
        if(flight && flight.__rapidRunwayRoll){
            predicted = Math.min(predicted, flight.__rapidRunwayRoll);
        }
-       predicted = Math.max(now + (ETD_MIN_AHEAD_SEC * 1000), Math.min(now + MAX_AHEAD_MS, predicted));
+       // Ensure we are at least X seconds in future
+       predicted = Math.max(now + (ETD_MIN_AHEAD_SEC * 1000), predicted);
     }
     return predicted;
   }
@@ -5580,6 +6287,7 @@ return null;
 
   // Status Helpers
   let prevPilotStates = new Map();
+  const pilotHistory = new Map(); // cid -> array of {lat,lon,gs,hdg,alt,t}
   let statusMemory = new Map();
   const takeoffMem = new Map(); // cid -> { until, lastSeen }
   // Lineup memory (per CID)
@@ -5604,6 +6312,43 @@ return null;
     for(const [cid, e] of lineupMem.entries()){
       if(!e?.lastSeen || (now - e.lastSeen) > LINEUP_MEM_TTL_MS) lineupMem.delete(cid);
     }
+  }
+
+  function backtrackTakeoffRunway(cid, runwayIdx) {
+      const trail = pilotHistory.get(String(cid));
+      if (!trail || !trail.length || !runwayIdx) return null;
+
+      // Wir suchen rückwärts (vom neusten zum ältesten Punkt)
+      // Wir suchen einen Punkt, wo wir "schnell genug für Takeoff Roll" aber "langsam genug für Boden" waren
+      // und geometrisch auf der Bahn saßen.
+      for (let i = trail.length - 1; i >= 0; i--) {
+          const p = trail[i];
+
+          // Filter: Ground Roll Speed Window (z.B. 20kts bis 140kts)
+          // Zu langsam = Gate/Taxi, Zu schnell = Air
+          if (p.gs < 15 || p.gs > 150) continue;
+
+          for (const ep of runwayIdx.endpoints) {
+              const other = runwayIdx.endpoints.find(e => e.wayId === ep.wayId && e.epId !== ep.epId);
+              if (!other) continue;
+
+              // 1. Heading Check (Grober Filter)
+              const rwyHdg = bearingDeg(ep.lat, ep.lon, other.lat, other.lon);
+              let hDiff = Math.abs(p.hdg - rwyHdg);
+              if (hDiff > 180) hDiff = 360 - hDiff;
+              if (hDiff > 25) continue; // Nicht aligned
+
+              // 2. Geometrie Check (Sind wir auf der Piste?)
+              const proj = projectToRunwayAxisMeters(p.lat, p.lon, ep.lat, ep.lon, other.lat, other.lon);
+
+              // Lateral < 32m (auf Asphalt), Along > 0 (nach Schwelle) und < Length (vor Ende)
+              if (proj && proj.lateralM < 32 && proj.t > -0.05 && proj.t < 0.8) {
+                  // Treffer! Das war unsere Startbahn.
+                  return ep.designator;
+              }
+          }
+      }
+      return null;
   }
 
   // Phase groups (used to prevent noisy regressions, e.g. DEPARTING -> TAKEOFF)
@@ -5640,6 +6385,8 @@ return null;
         if(proj.dist <= HOTZONE_DIST_M){
            const planeHdg = Number(p.heading || 0);
 
+           console.log(`[HOTZONE @ ${focusIcao}] ${p.callsign} near ${zone.rwyDes}: Dist=${proj.dist.toFixed(1)}m (Max ${HOTZONE_DIST_M}), t=${proj.t.toFixed(2)}, HdgDiff=${diffDebug.toFixed(1)}°`);
+
            // Logic: Angle Difference to Runway
            const diff = angleDiffDeg(planeHdg, zone.rwyHdg);
            const diffOpp = angleDiffDeg(planeHdg, (zone.rwyHdg + 180) % 360);
@@ -5649,11 +6396,13 @@ return null;
            // Actually, simpler: if alignment is > 45, it is NOT a lineup.
            if(align > 45){
              // It's a Crossing -> Status remains TAXI (return null)
+             console.log(`   -> Rejected: Crossing angle (${align.toFixed(1)}°)`);
              return null;
            }
 
            // LINEUP: Heading approximates Runway (< 30 deg)
            if(align < 35 || (proj.t > 0.8 && align < 50)){
+                         console.log(`   -> MATCH! Lineup detected on ${zone.rwyDes}`);
              return zone.rwyDes;
            }
         }
@@ -5744,7 +6493,7 @@ return null;
       if(!e?.lastSeen || (now - e.lastSeen) > TAKEOFF_MEM_TTL_MS) takeoffMem.delete(cid);
     }
   }
-  const STATUS_BANDS = { NEAR_APT_NM: 7, APPROACH_ENTER_NM: 55, APPROACH_EXIT_NM: 82, FINAL_ENTER_NM: 10, FINAL_EXIT_NM: 18, DEPAREA_ENTER_NM: 25, DEPAREA_EXIT_NM: 40 };
+  const STATUS_BANDS = { NEAR_APT_NM: 7, APPROACH_ENTER_NM: 45, APPROACH_EXIT_NM: 82, FINAL_ENTER_NM: 10, FINAL_EXIT_NM: 18, DEPAREA_ENTER_NM: 25, DEPAREA_EXIT_NM: 40 };
 
   function computeVerticalRateFpm(prev, curAlt, curT){
     if(!prev || prev.alt == null || prev.t == null) return null;
@@ -5878,11 +6627,78 @@ return null;
     const inDepZone      = (dDep != null && dDep <= depBand);
     const stableCruise = airborne && alt >= 20000 && gs >= 140 && (absVr == null || absVr < 350) && !(inApproachZone);
 
-    const finalCeiling = dArr != null ? Math.max(1800, Math.min(9500, dArr*330 + 1100)) : 5000;
-    const finalOk = airborne && inFinalZone && gs >= 80 && alt <= finalCeiling && (descending || (vr != null && vr < -200) || alt <= 3500);
+    // --- NEW: Runway & Centerline Resolution (Moved Up) ---
+    // Wir berechnen dies VOR dem Status-Check, um "Established on Centerline" für "FINAL" zu nutzen.
+    if(boardType === "arr" && airborne && inApproachZone && focusIcao && arr === focusIcao){
+        const rIdx = runwayIndexByIcao.get(focusIcao);
+        if(!rIdx) ensureRunwayIndexForIcao(focusIcao).catch(()=>{});
+        else {
+            const active = globalActiveRunways[focusIcao] || null;
+            const elev = arrAp ? (arrAp.elevation || 0) : 0;
+            const mockFlight = { pilot: p, id: p.cid };
+            const rwyEp = resolveArrivalRunwayForFlight(mockFlight, rIdx, active, dArr, elev);
+            
+            if(rwyEp){
+                p.arrRwyEp = rwyEp;
+                p.arrRwyDes = rwyEp.designator;
+            } else {
+                p.arrRwyEp = null;
+                p.arrRwyDes = null;
+            }
+        }
+    }
 
-    const approachOk = airborne && inApproachZone && gs >= 80 && (descending || alt <= 16000 || (dArr != null && dArr < 35 && alt <= 21000));
-    const goAroundOk = airborne && inApproachZone && climbing && alt <= 11000 && gs >= 90;
+    // Centerline Stability Check (Min 2 Refreshes established)
+    const mem = statusMemory.get(key);
+    if(mem && p.__isEstablished) mem.estCount = (mem.estCount || 0) + 1;
+    else if(mem) mem.estCount = 0;
+    const onCenterlineStable = (mem && mem.estCount >= 1);
+
+    const finalCeiling = dArr != null ? Math.max(1800, Math.min(9500, dArr*330 + 1100)) : 5000;
+    // FIX: FINAL Status triggert nun auch, wenn wir stabil auf der Extended Centerline sind (Geo-Lock)
+    const finalOk = airborne && gs >= 80 && (
+        (inFinalZone && alt <= finalCeiling && (descending || (vr != null && vr < -200) || alt <= 3500)) 
+        || 
+        (onCenterlineStable && dArr < 18 && alt < 6000) // Extended Centerline Capture (bis 18NM)
+    );
+
+    // FIX: Realistischerer Approach-Trigger
+    // Neu: Kombination aus Höhe UND Geschwindigkeit.
+    const approachOk = airborne && inApproachZone && gs >= 80 && (
+        // A: Klassischer Anflugsektor (tief genug)
+        alt <= 9500
+        ||
+        // B: STAR / Vectoring (mittelhoch, aber Speed reduziert < 280kts)
+        (alt <= 14000 && gs <= 280)
+        ||
+        // C: High Energy Capture (sehr nah < 18NM, da darf man auch noch höher sein)
+        (dArr != null && dArr <= 18 && alt <= 17000)
+    );
+
+// --- GO-AROUND OPTIMIERUNG ---
+
+    // 1. Kontext: War der Flug vorher schon stabil im Anflug?
+    // FIX: Nur wenn er wirklich nah war (< 12 NM) oder bereits im FINAL Status war.
+    // Das verhindert False-Positives bei Starts von nahen Flughäfen (z.B. EDKF -> EDDF),
+    // die zwar in der Approach-Zone (45NM) sind und steigen, aber nie einen Anflug versucht haben.
+    const wasInFinal = (prevPhase === "FINAL");
+    const wasDeepInApproach = (prevPhase === "APPROACH" && dArr != null && dArr < 12);
+
+    // 2. Energie: Steigt er signifikant? (Rauschen filtern)
+    const isClimbingStrong = (vr != null && vr > 8000); // min 800 fpm
+
+    // 3. Höhe: Ist er tief genug für einen Go-Around? (AGL Logik)
+    // Wir nutzen arrAp.elevation wenn verfügbar, sonst 0.
+    const destElev = arrAp ? (arrAp.elevation || 0) : 0;
+    const agl = alt - destElev;
+    const isLowEnough = (agl < 6000);
+
+    // Entscheidung:
+    // A) Wir sind bereits im GOAROUND -> Status halten solange wir steigen/nicht zu hoch sind
+    // B) Wir waren im Approach/Final -> Trigger NUR bei starkem Steigen + tiefer Höhe
+    const goAroundOk =
+        (prevPhase === "GOAROUND" && climbing && agl < 10000) ||
+        ((wasInFinal || wasDeepInApproach) && isClimbingStrong && isLowEnough && inApproachZone && gs >= 90);
 
     // FIX: If a Go-Around is detected, we MUST reset any "Landed" state immediately to show ETA again.
     if(goAroundOk && boardType === "arr"){
@@ -5897,7 +6713,10 @@ return null;
             const active = globalActiveRunways[focusIcao] || null;
             // Call with dArr (distance in NM) and Destination Elevation (for AGL check)
             const elev = arrAp ? (arrAp.elevation || 0) : 0;
-            const rwyEp = resolveArrivalRunwayForFlight(p, rIdx, active, dArr, elev);
+                // FIX: Wrapper mit ID für die Queue-Logik
+            const mockFlight = { pilot: p, id: p.cid };
+
+            const rwyEp = resolveArrivalRunwayForFlight(mockFlight, rIdx, active, dArr, elev);
             if(rwyEp){
                 p.arrRwyEp = rwyEp;
                 p.arrRwyDes = rwyEp.designator;
@@ -6128,6 +6947,17 @@ else if(onGround && surfaceDep){
              if(memRwy && memRwy !== true) rwyName = memRwy;
           }
 
+          // BACKTRACK FIX: Wenn wir immer noch keine Runway haben (Refresh Rate Pech),
+          // schauen wir in die Historie der letzten Minuten.
+          if (!rwyName && runwayIndexByIcao.has(focusIcao)) {
+             const found = backtrackTakeoffRunway(p.cid, runwayIndexByIcao.get(focusIcao));
+             if (found) {
+                 rwyName = found;
+                 // Optional: Speichern wir das gefundene Ergebnis im LineupMem, damit es stabil bleibt?
+                 markLineup(p.cid, rwyName);
+             }
+          }
+
           const txt = rwyName ? statusTxt("takeoff_rwy", { rwy: normalizeRunwayDesignator(rwyName) }) : statusTxt("takeoff");
           cand = { phase:"TAKEOFF", rank:1, text: txt, cls:"warn", finished:false };
         }else{
@@ -6215,6 +7045,7 @@ else if(onGround && surfaceDep){
     if(boardType === "dep" && onGround && cand && String(cand.phase || "").toUpperCase() === "TAXI"){
       const rwy = depLineupHeld;
       if(rwy){
+        cand.phase = "LINEUP";	  
         cand.text = (rwy === true)
           ? statusTxt("lineup")
           : statusTxt("lineup_rwy", { rwy: rwy });
@@ -6262,6 +7093,22 @@ else if(onGround && surfaceDep){
   const prev = mem.etaTs;
   const prevPhase = mem.phase || "UNK";
 
+    // SPECIAL: Go-Around Immediate Snap
+    // Prevent smoothing loop when a Go-Around occurs (we want the +15min penalty visible immediately)
+    if(curPhase === "GOAROUND"){
+      mem.etaTs = candTs;
+      mem.phase = curPhase;
+      return candTs;
+    }
+
+    // FIX: Short Final Snap
+    // Wenn wir im FINAL sind, wollen wir die echte Physik sofort sehen, kein Smoothing.
+    if(curPhase === "FINAL"){
+       mem.etaTs = candTs;
+       mem.phase = curPhase;
+       return candTs;
+    }
+
     // Snap on ground/prefile/finished transitions (keeps the display stable when switching modes)
     const snapPhase = (x) => (x==="GATE" || x==="TAXI" || x==="PREFILE" || x==="FINISHED");
     if(prevPhase !== curPhase && (snapPhase(prevPhase) || snapPhase(curPhase))){
@@ -6281,8 +7128,8 @@ else if(onGround && surfaceDep){
     let alpha = 0.20;
     let maxJump = 5 * MIN_MS;
     if(curPhase === "TAKEOFF" || curPhase === "DEPARTING" || curPhase === "CLIMB"){
-      alpha = 0.10;
-      maxJump = 2.0 * MIN_MS;
+      alpha = 0.30; // Optimization: Weighted Blending (0.3 new / 0.7 old)
+      maxJump = 5.0 * MIN_MS; // Allow bigger jumps initially to adjust to physics
     }else if(curPhase === "CRUISE"){
       alpha = 0.24;
       maxJump = 6.0 * MIN_MS;
@@ -6320,75 +7167,167 @@ else if(onGround && surfaceDep){
     }
   }
 
-  // Updated to accept optional specific target coordinates (e.g. Runway Threshold)
-  function computeDynamicEtaTs(p, destAp, phase, targetCoords=null){
+  // --- AIRCRAFT PERFORMANCE PROFILES ---
+  const ACFT_SPEED_PROFILES = {
+      // B747, B777, A380, A350, A340, A330, MD11, C17, etc.
+      HEAVY: { cruise: 480, descent: 290, tma: 210, approach: 160, final: 145, min: 135 },
+      // Standard Jets (A320, B737, CRJ, ERJ)
+      JET:   { cruise: 450, descent: 280, tma: 200, approach: 150, final: 135, min: 125 },
+      // Turboprops (Dash 8, ATR, King Air)
+      TURBO: { cruise: 290, descent: 220, tma: 170, approach: 130, final: 115, min: 100 },
+      // GA Pistons (Cessna, Piper, Mooney)
+      PROP:  { cruise: 110, descent: 100, tma: 90,  approach: 80,  final: 70,  min: 50  }
+  };
+
+  function getAircraftSpeedProfile(typeStr) {
+      const t = String(typeStr || "").trim().toUpperCase();
+      // GA Props
+      if (/^(C17|C15|C18|PA2|PA3|PA4|SR2|DA4|DA6|M20|C82)/.test(t)) return ACFT_SPEED_PROFILES.PROP;
+      // Turboprops
+      if (/^(DH8|AT7|AT4|B35|BE2|JS|SF3|Q40|PC1|C208|TBM)/.test(t)) return ACFT_SPEED_PROFILES.TURBO;
+      // Heavies
+      if (/^(B74|B77|B78|A33|A34|A35|A38|MD1|DC1|C17|C5|AN1)/.test(t)) return ACFT_SPEED_PROFILES.HEAVY;
+      // Default (Jets)
+      return ACFT_SPEED_PROFILES.JET;
+  }
+
+function computeDynamicEtaTs(f, destAp, phase, targetCoords=null, rwyDes=null, rIdx=null){
+    const p = f.pilot;
     if(!p) return null;
-    const lat = Number(p.latitude), lon = Number(p.longitude);
-    const alt = Number(p.altitude || 0);
-    const gs = Number(p.groundspeed || 0);
-    const targetLat = targetCoords ? targetCoords.lat : (destAp ? destAp.latitude : null);
-    const targetLon = targetCoords ? targetCoords.lon : (destAp ? destAp.longitude : null);
-    const targetElev = destAp ? (destAp.elevation || 0) : 0;
-
-    if(targetLat == null || targetLon == null) return null;
-    if(!isFinite(lat) || !isFinite(lon)) return null;
     const now = Date.now();
-    const distNm = haversineNm(lat, lon, targetLat, targetLon);
-    if(!isFinite(distNm)) return null;
-
-    // SPECIAL: Go-Around Logic
-    // If phase is GOAROUND, distance is irrelevant (we are at the airport but can't land).
-    // Assume a standard missed approach procedure / traffic circuit time (~15 mins).
-    if (phase === "GOAROUND") return now + (15 * 60000);
-
-    // --- NEW ENERGY & SPEED PROFILE LOGIC ---
-
-    // 1. Calculate "Energy Distance" (Track Miles needed to descend)
-    // Rule of thumb: 3nm per 1000ft descent + deceleration buffer.
-    // We compare straight line distance vs. required descent distance and take the larger one.
-    // This handles cases where aircraft is high & fast close to airport (needs vectors/orbit).
-    const heightToLose = Math.max(0, alt - targetElev);
-    // Using 310ft/nm (approx 3 degree glide)
-    const descentDistNm = heightToLose / 310;
-
-    // Effective distance to fly (Geometric vs Energy)
-    // We use a blend logic: If straight distance is much shorter than descent needs, we assume maneuvering.
-    let effectiveDist = Math.max(distNm, descentDistNm);
-
-    // 2. Dynamic Speed Profile
-    // Instead of current GS, we assume a deceleration profile for the remaining miles.
-    // If far out (>50nm), current GS matters most.
-    // If close in (<15nm), landing speed (approx 140kts) matters most.
-    let avgSpeed = gs;
-
-    // On Short Final (< 6NM), trust the actual GS if reasonable (stabilized approach),
-    // otherwise assume standard landing speed.
-    if (effectiveDist < 6) avgSpeed = (gs > 60 && gs < 190) ? gs : 135;
-    else if (effectiveDist < 15) avgSpeed = 160; // Approach / Flaps
-    else if (effectiveDist < 50) avgSpeed = Math.min(gs, 200); // Terminal Area / STAR (Conservative)
-    else if (effectiveDist < 90) avgSpeed = Math.min(gs, 240); // Descent
-    else avgSpeed = Math.max(gs, 300); // Enroute
-
-    // Sanity clamp for speed
-    avgSpeed = Math.max(120, avgSpeed);
-
-    // 3. Time Calculation
-    // t = d / v
-    const hours = effectiveDist / avgSpeed;
-
-    // Add a procedure penalty (turns, ATC spacing) that FADES OUT as we get closer.
-    // 30 NM out: ~2.5 mins penalty (for pattern/vectors).
-    // 8 NM out (Short Final): 0 mins penalty (straight in).
-    let procPenaltyMin = 0;
-    if(effectiveDist < 35 && effectiveDist > 8) {
-        const factor = (effectiveDist - 8) / (35 - 8); // 0.0 at 8nm, 1.0 at 35nm
-        procPenaltyMin = 2.5 * factor;
+    const gs = Math.max(Number(p.groundspeed || 0), 1); // Avoid div/0
+	
+    // Get Performance Profile based on aircraft type
+    const perf = getAircraftSpeedProfile(f.aircraft);	
+	
+    // --- 1. GEO TRICHTER CHECK ---
+    // Wir prüfen nochmal explizit die Qualität für die zugewiesene Piste
+    let funnelData = null;
+    if (rwyDes && rIdx) {
+        const ep = rIdx.endpoints.find(e => e.designator === rwyDes);
+        const other = ep ? rIdx.endpoints.find(e => e.wayId === ep.wayId && e.epId !== ep.epId) : null;
+        if (ep && other) {
+            funnelData = calculateApproachQuality(p, ep, other, rIdx);
+        }
     }
 
-    // Deceleration Penalty: If aircraft is fast close in, add time for braking.
-    if (effectiveDist < 25 && gs > 240) procPenaltyMin += 2.0;
-    return now + (hours * 60 * 60000) + (procPenaltyMin * 60000);
-  }
+    // Wenn der Flug sauber im Trichter (Established) ist:
+    if (funnelData && (funnelData.isEstablished || funnelData.distNm < 12)) {
+        const distNm = funnelData.distNm;
+        if (distNm < 5) {
+             // Reine Flugzeit. Wir nehmen aktuelle GS, da im Short Final die Speed stabil ist.
+             // Wir addieren minimale 20 Sekunden für Flare/Rollout, damit die Zeit nicht "zu" exakt auf Touchdown springt.
+             const minutes = (distNm / gs) * 60;
+             return now + (minutes * 60000) + 20000;
+        }
+
+        // A. Präzises Speed-Profil für den Final (konvergierend auf Landing Speed)
+
+        let avgSpeed = gs;
+        if (distNm < 12) {
+             // Final: Speed konvergiert langsam gegen Vref (perf.final)
+             // Je näher, desto mehr Gewicht auf Final Speed.
+             const factor = Math.max(0, (distNm - 5) / 5); // 0 bei 5nm, 1 bei 10nm
+             avgSpeed = (gs * 0.7) + (perf.final * 0.3); // Vertraue GS mehr als Modell
+        } else {
+             // Intercept: Speed geht Richtung Approach Speed
+             avgSpeed = (gs * 0.6) + (perf.approach * 0.4);
+        }
+
+        avgSpeed = Math.max(perf.min, avgSpeed); // Dynamic Safety Floor
+
+        // Reine Flugzeit in Minuten
+        let minutes = (distNm / avgSpeed) * 60;
+
+        // B. QUEUE PENALTY (Staffelung)
+        // Nur anwenden, wenn wir > 5 NM entfernt sind. Im Short Final ist die Staffelung fix.
+        if (distNm > 7) {
+            const rwyKey = normalizeRunwayDesignator(rwyDes);
+            const queue = runwayQueues.get(rwyKey);
+
+            if (queue && queue.length > 1) {
+                queue.sort((a, b) => a.distNm - b.distNm);
+                const myIndex = queue.findIndex(x => x.id === f.id);
+                if (myIndex > 0) {
+                    const ahead = queue[myIndex - 1];
+                    const distDiff = Math.abs(distNm - ahead.distNm);
+                    // Wenn wir weniger als 3NM Abstand haben UND noch weit weg sind, addieren wir Puffer
+                    if (distDiff < 2.5) {
+                        minutes += 1.0;
+                    }
+                }
+            }
+        }
+
+        return now + (minutes * 60000);
+    }
+
+    // --- FALLBACK: ALTE LOGIK (TMA Heuristik) ---
+    // Wenn nicht im Trichter (Downwind, Base, Enroute), nutzen wir die bestehende Logik.
+
+    const lat = Number(p.latitude), lon = Number(p.longitude);
+    const targetLat = targetCoords ? targetCoords.lat : (destAp ? destAp.latitude : null);
+    const targetLon = targetCoords ? targetCoords.lon : (destAp ? destAp.longitude : null);
+
+    if(targetLat == null || targetLon == null) return null;
+
+    const directDistNm = haversineNm(lat, lon, targetLat, targetLon);
+    const alt = Number(p.altitude);
+    const destElev = destAp ? (destAp.elevation || 0) : 0;
+    const agl = alt - destElev;
+
+    // Go-Around / Ground Check (wie vorher)
+    if (phase === "GOAROUND") return now + (15 * 60000);
+    if (gs < 50 && alt < (destElev + 500)) return now;
+
+    // --- IMPROVED FALLBACK LOGIC ---
+    // Problem: Flüge mit hoher Energie (zu hoch für die Distanz) wurden unterschätzt.
+    // Lösung: Wir berechnen die Distanz, die man zum Abbau der Höhe *mindestens* braucht.
+
+    // 1. Energy Distance: Man braucht ca. 3.2 NM pro 1000ft zum Sinken (3° Pfad + Deceleration)
+    //    Wer FL220 ist, braucht min. 70 NM, egal wie nah er am Airport ist (Orbit/Vektoren nötig).
+    const energyDistNm = (agl > 0) ? (agl / 320) : 0;
+
+    // 2. Geometrische Distanz mit "STAR-Faktor" (Umwege in der TMA)
+    // FIX: Skalierender Faktor.
+    // Bei 5 NM fliegen wir fast direkt (Faktor 1.05).
+    // Bei 40 NM fliegen wir STARs (Faktor 1.35).
+    let routeFactor = 1.1;
+    if (directDistNm < 10) routeFactor = 1.05; // Fast direkt
+    else if (directDistNm < 40) routeFactor = 1.30; // TMA Manövrieren
+    else if (directDistNm < 100) routeFactor = 1.15; // STAR Entry
+
+    // Die "wahre" Strecke ist das Maximum aus Geometrie und Höhenbedarf
+    const trackMiles = Math.max(directDistNm * routeFactor, energyDistNm);
+
+    // --- SPEED PROFIL CALCULATION ---
+    
+    // Startwert ist aktuelle GS
+    let avgSpeed = gs;
+
+    // RECOVERY LOGIC (Der "GEC997 Fix" - jetzt dynamisch):
+    // Wenn ein Flugzeug weit weg ist (> 50 NM), aber extrem langsam (< 60% Cruise Speed)
+    // (z.B. nach Start, im Holding oder Divert), nehmen wir an, er beschleunigt wieder.
+    if (trackMiles > 50 && gs < (perf.cruise * 0.6)) {
+        // Wir nutzen 85% der Cruise Speed als Berechnungsgrundlage
+        avgSpeed = Math.max(gs, perf.cruise * 0.85);
+    }
+
+    // 3. Speed Profil (Deceleration)
+    if (trackMiles < 120) {
+        const landingSpeed = perf.final;
+        // Faktor: 1.0 bei 120nm, 0.0 bei 0nm
+        const f = Math.max(0, trackMiles / 120);
+        // Hinweis: Wir nutzen 'avgSpeed' hier als Startwert (falls durch Recovery oben erhöht)
+        avgSpeed = (avgSpeed * f) + (landingSpeed * (1 - f));
+    }
+
+    // Safety Floor für Speed
+    avgSpeed = Math.max(perf.min, avgSpeed);
+
+    return now + ((trackMiles / avgSpeed) * 60 * 60000);
+}
+
   function applyEtaForFlight(f, focusAp, boardType){
     if(boardType !== "arr") return;
     const now = Date.now();
@@ -6410,24 +7349,52 @@ else if(onGround && surfaceDep){
       let targetCoords = null;
       if(f.arrRwyEp) targetCoords = { lat: f.arrRwyEp.lat, lon: f.arrRwyEp.lon };
 
-      cand = computeDynamicEtaTs(f.pilot, focusAp, phase, targetCoords);
+      const rIdx = runwayIndexByIcao.get(currentAirportIcao);
+          cand = computeDynamicEtaTs(f, focusAp, phase, targetCoords, f.arrRwyDes, rIdx);
 
-      // Progress Blending (Live vs Plan)
+// Progress Blending (Live vs Plan) with Sanity Check
       if(isFinite(cand) && f.fp?.enroute_time){
          const distFlown = f.dFromPlanNm || 0;
          const distRem = f.dToFocusNm || 0;
          const totalDist = distFlown + distRem;
          const progress = (totalDist > 5) ? (distFlown / totalDist) : 0;
+
          const std = f.stdTs || (f.etaPlannedTs - (parseDurationHHMM(f.fp.enroute_time)*60000));
          const durMin = parseDurationHHMM(f.fp.enroute_time);
+
+         let finalCand = cand; // Start with pure physics
+
          if(isFinite(std) && durMin){
              const planEta = std + (durMin * 60000);
-             // Trust Plan early (progress < 20%), Trust Physics late (>90%)
-             let weight = progress < 0.2 ? 0.05 : (progress * progress);
-             if(progress > 0.9) weight = 1.0;
-             // Safety net: if deviation > 1h, trust physics sooner
-             if(Math.abs(cand - planEta) > 60*60000) weight = Math.max(weight, 0.5);
-             cand = (cand * weight) + (planEta * (1 - weight));
+
+             // Trust Plan early (progress < 10%), Trust Physics late (>80%)
+             let weight = progress < 0.1 ? 0.0 : (progress * progress); // Quadratic curve favoring physics later
+             if(progress > 0.8) weight = 1.0;
+
+             // SANITY CHECK (Der QFA89 Fix):
+             // Wenn Physik und Plan mehr als 90 Minuten auseinander liegen, ist der Plan oft Müll
+             // (falsche Abflugzeit im Flugplan oder Sim-Rate Beschleunigung).
+             // In dem Fall vertrauen wir zu 100% der Physik, sofern die Physik plausibel ist (>0).
+             const delta = Math.abs(cand - planEta);
+             const sanityThreshold = 90 * 60000; // 90 Minuten
+
+             if (delta > sanityThreshold) {
+                 weight = 1.0; // Force Physics
+             }
+
+             finalCand = (cand * weight) + (planEta * (1 - weight));
+
+             // Debug logging mit Klarnamen für die Analyse
+             logCalcDebug("ETA_BLEND", f.cid, f.callsign, {
+                 physicsEta: cand,
+                 planEta: planEta,
+                 deltaMinutes: Math.round(delta/60000),
+                 progress: progress.toFixed(2),
+                 weightUsed: weight.toFixed(2),
+                 sanityOverride: (delta > sanityThreshold)
+             }, finalCand);
+
+             cand = finalCand;
          }
       }
 
@@ -6466,7 +7433,7 @@ else if(onGround && surfaceDep){
     } else if(destAp){
       // Map early departure phases to DEPAREA so computeDynamicEtaTs uses a sensible factor.
       const etaPhase = (phase === "DEPARTING" || phase === "CLIMB") ? "DEPAREA" : phase;
-      cand = computeDynamicEtaTs(f.pilot, destAp, etaPhase);
+      cand = computeDynamicEtaTs(f, destAp, etaPhase);
 
       // --- NEW INTELLIGENT BLENDING ALGORITHM ---
       // Problem: Immediately after takeoff (climb), Groundspeed is low, resulting in absurdly late ETAs.
@@ -6492,6 +7459,13 @@ else if(onGround && surfaceDep){
 
              // VFR/Low-Slow Guard: If Live & Plan match closely (<15m diff), trust Live more (don't force Plan).
              if(Math.abs(cand - planEta) < 15 * 60000) weight *= 0.25;
+
+             logCalcDebug("DEST_ETA_BLEND", f.cid, f.callsign, {
+                 rawCand: cand,
+                 planEta,
+                 progress,
+                 weight
+             }, null);
 
              cand = (cand * (1 - weight)) + (planEta * weight);
          }
@@ -6530,7 +7504,12 @@ else if(onGround && surfaceDep){
     const phase = f.status?.phase || "UNK";
     // If we have a calculated ETD, prefer it even if phase is momentarily GATE (reload recovery)
     if(f.etdTs != null && isFinite(f.etdTs)) return f.etdTs;
-    if(phase === "GATE" || phase === "PREFILE") return (f.stdTs ?? null);
+    if(phase === "GATE" || phase === "PREFILE") {
+      const ts = f.stdTs ?? null;
+      // Ground Sliding: If STD is in the past, slide to Now + 10min
+      if(ts && ts < Date.now()) return Date.now() + 10 * 60000;
+      return ts;
+    }
     return (f.destEtaTs ?? f.etaPlannedTs ?? null);
   }
 
@@ -6572,19 +7551,27 @@ else if(onGround && surfaceDep){
   const ARR_PHASE_ORDER = { GOAROUND:0, FINAL:1, APPROACH:2, DESCENT:3, CRUISE:4, DEPAREA:5, PREFILE:6, GATE:7, UNK:90, FINISHED:99 };
   const DEP_PHASE_ORDER = { TAKEOFF:1, LINEUP:2, TAXI:3, GATE:4, PREFILE:5, DEPARTING:6, CLIMB:7, CRUISE:8, DESCENT:9, APPROACH:10, FINAL:11, GOAROUND:10, UNK:90, FINISHED:99 };
   const SUBKEY_MAX = 1e12 - 1;
-  function statusSensibleKey(f, boardType){
+function statusSensibleKey(f, boardType){
     const phase = f.status?.phase || "UNK";
     const base = (boardType==="arr") ? (ARR_PHASE_ORDER[phase] ?? 90) : (DEP_PHASE_ORDER[phase] ?? 90);
-    let sub = 9e12;
+    let sub = 0;
+
     if(boardType === "arr"){
-      if(phase==="FINAL" || phase==="APPROACH" || phase==="DESCENT" || phase==="GOAROUND") sub = Math.floor((f.dToFocusNm ?? 9999) * 1000);
-      else { const ts = (arrDisplayTimeTs(f) ?? null); sub = ts != null ? Math.floor(ts/1000) : 9e12; }
+      // --- FIX START ---
+      // Ankünfte IMMER nach Zeit (ETA/ALDT) sortieren, damit die Liste visuell logisch ist.
+      // Vorher wurde hier nach Distanz sortiert, was bei Vektoren/Holdings zu Verwirrung führte.
+      const ts = (arrDisplayTimeTs(f) ?? null);
+      // Fallback auf sehr große Zahl, wenn keine Zeit da ist, damit es unten landet
+      sub = ts != null ? Math.floor(ts/1000) : 9e11;
+      // --- FIX END ---
     } else {
-            if(phase==="TAXI"){
+      // Abflüge: Hier ist Distanz-Logik sinnvoll (wer ist am nächsten zur Piste/zum Start?)
+      if(phase==="TAXI"){
         const ts = (f.etdTs ?? f.stdTs ?? null);
         sub = ts != null ? Math.floor(ts/1000) : 9e12;
       }
-          else if(phase==="TAKEOFF"){
+      else if(phase==="TAKEOFF"){
+        // Wer hebt gerade ab (kleine Distanz) -> oben
         sub = Math.floor((f.dFromFocusNm ?? 9999) * 1000);
       }
       else if(phase==="GATE" || phase==="PREFILE"){
@@ -6592,6 +7579,7 @@ else if(onGround && surfaceDep){
         sub = ts != null ? Math.floor(ts/1000) : 9e12;
       }
       else if(phase==="DEPARTING" || phase==="CLIMB"){
+        // Wer ist noch nah am Flughafen -> oben
         sub = Math.floor((f.dFromFocusNm ?? 9999) * 1000);
       }
       else if(phase==="CRUISE"){
@@ -6604,6 +7592,7 @@ else if(onGround && surfaceDep){
         sub = (metric != null && isFinite(metric)) ? (SUBKEY_MAX - metric) : 9e12;
       }
       else if(phase==="DESCENT" || phase==="APPROACH" || phase==="FINAL" || phase==="GOAROUND"){
+         // Falls Abflüge irgendwo landen (Divert/Return) -> Distanz zum Ziel
         sub = Math.floor((f.dToPlanNm ?? 9999) * 1000);
       }
       else {
@@ -6611,6 +7600,10 @@ else if(onGround && surfaceDep){
         sub = ts != null ? Math.floor(ts/1000) : 9e12;
       }
     }
+
+    // Safety clamp für sub, damit es nicht in den base-Bereich reinläuft
+    if (sub > SUBKEY_MAX) sub = SUBKEY_MAX;
+
     return base*1e12 + sub;
   }
   function sortFlights(list, {by, dir}, boardType){
@@ -6749,6 +7742,8 @@ else if(onGround && surfaceDep){
         if(this.boardType === "dep"){
           const ts = depDisplayTimeTs(f);
           const kind = depDisplayTimeKind(f);
+          // Apply "Smart Rounding" for display only (prevents past times)
+          const displayTs = (ts && kind === 'ETD') ? etdDisplayMinuteTs(ts) : ts;
 
           // Blink the kind label for one refresh period if it changed vs last refresh.
           if(tr.__timeKindSig && tr.__timeKindSig !== kind){
@@ -6759,7 +7754,7 @@ else if(onGround && surfaceDep){
 
           c.time.innerHTML =
             `<span class="timeKind${tr.__timeBlinkActive ? " blink" : ""}">${escapeHtml(kind)}</span>` +
-            `<span class="timeVal">${fmtHHMMPlusHtml(ts)}</span>`;
+            `<span class="timeVal">${fmtHHMMPlusHtml(displayTs)}</span>`;
         }else{
           const kind = arrDisplayTimeKind(f);
           const ts = arrDisplayTimeTs(f);
@@ -6806,24 +7801,60 @@ else if(onGround && surfaceDep){
         c.typeRoute.title = routeText;
       }
 
-      if(c.altgs){
-
-//              Kept for Debugging
-//      c.altgs.textContent = altGsText(f.pilot);
-
-        // Hide Alt/GS for flights on ground (Gate, Taxi, Lineup) to reduce clutter.
-        // Keep it for TAKEOFF to show acceleration.
+if(c.altgs){
+        // Hide Alt/GS for flights on ground to reduce clutter.
         const ph = f.status?.phase;
         const hide = (ph === "GATE" || ph === "TAXI" || ph === "PREFILE" || ph === "LINEUP" || f.status?.finished);
+
         if(hide){
-            c.altgs.innerHTML = '<span class="muted" style="opacity:0.3">—</span>';
+            c.altgs.innerHTML = '<span class="muted" style="opacity:0.2">—</span>';
         } else {
-            c.altgs.textContent = altGsText(f.pilot);
+            // Daten holen
+            const rawAlt = (f.pilot?.altitude ?? null);
+            const gs = (f.pilot?.groundspeed ?? null);
+
+            // Formatieren
+            const altStr = f.smartAlt || (rawAlt != null ? String(Math.round(rawAlt / 100) * 100) : "—");
+            const gsStr = gs != null ? String(Math.round(gs)) : "—";
+
+            // Untereinander rendern (Stacked)
+            c.altgs.innerHTML = `
+                <div class="cell-stacked">
+                    <span class="topVal">${altStr}</span>
+                    <span class="botVal">${gsStr} <span style="font-size:9px; opacity:0.6">kt</span></span>
+                </div>
+            `;
         }
       }
 
       if(c.status){
-        c.status.innerHTML = `<span class="badge ${f.status.cls}${tr.__blinkActive ? " blink" : ""}"><span class="sDot"></span><span>${escapeHtml(f.status.text)}</span></span>`;
+        // Elegant UI: Split Status Text into [Badge] + [Detail Pill]
+        let mainText = f.status.text || "—";
+        let subHtml = "";
+
+        // 1. Runway Detection (z.B. "FINAL RWY 25L") -> Badge: FINAL, Pill: RWY 25L
+        // Sucht nach " RWY " am Ende
+        const rwyMatch = mainText.match(/^(.*)\s(RWY\s.*)$/);
+        if(rwyMatch){
+            mainText = rwyMatch[1];
+            subHtml = `<span class="detail-pill">${escapeHtml(rwyMatch[2])}</span>`;
+        }
+        // 2. Gate Detection (z.B. "AM GATE A13") -> Badge: GATE, Pill: A13
+        else if(mainText.includes("GATE") && !mainText.includes(" / ")){ // Ignoriere generisches "GATE / TAXI"
+             const parts = mainText.split("GATE "); // Split bei "GATE "
+             if(parts.length > 1 && parts[1].trim() !== ""){
+                 mainText = "GATE"; // Badge Text verkürzen
+                 subHtml = `<span class="detail-pill">${escapeHtml(parts[1].replace("@","@ "))}</span>`;
+             }
+        }
+        // 3. Location Detection (z.B. "DIVERTED @ EDDN") -> Badge: DIVERTED, Pill: @ EDDN
+        else if(mainText.includes(" @")){
+             const parts = mainText.split(" @");
+             mainText = parts[0];
+             subHtml = `<span class="detail-pill">@${escapeHtml(parts[1])}</span>`;
+        }
+
+        c.status.innerHTML = `<div class="status-wrapper"><span class="badge ${f.status.cls}${tr.__blinkActive ? " blink" : ""}"><span class="sDot"></span><span>${escapeHtml(mainText)}</span></span>${subHtml}</div>`;
       }
 
       if(c.xp){
@@ -7121,7 +8152,10 @@ else if(onGround && surfaceDep){
     if(key === "time") return (boardType === "dep") ? t("th_time_std") : t("th_time_eta");
     if(key === "ap") return (boardType === "dep") ? t("th_to") : t("th_from");
     if(key === "callsign") return t("th_callsign");
-    if(key === "typeRoute") return t("th_type_route");
+        if(key === "typeRoute") {
+      // HTML-Tags entfernen für reine Textanzeige im Config-Menü
+      return t("th_type_route").replace(/<[^>]*>/g, "");
+        }
     if(key === "altgs") return t("th_alt_gs");
     if(key === "status") return t("th_status");
     if(key === "xp") return t("th_xp");
@@ -7139,10 +8173,15 @@ else if(onGround && surfaceDep){
       item.className = "colItem";
       item.dataset.key = key;
 
+      // Modern Toggle wrapper
+      const toggleLbl = document.createElement("label");
+      toggleLbl.className = "toggle";
       const cb = document.createElement("input");
       cb.type = "checkbox";
       cb.checked = !!lay.visible[key];
-      cb.title = "toggle";
+      const slider = document.createElement("span");
+      slider.className = "slider";
+      toggleLbl.append(cb, slider);
 
       const name = document.createElement("div");
       name.className = "name";
@@ -7188,7 +8227,7 @@ else if(onGround && surfaceDep){
       });
 
       btns.append(up, dn);
-      item.append(cb, name, btns);
+      item.append(toggleLbl, name, btns); // Changed order slightly for better visual
       container.appendChild(item);
     }
   }
@@ -7356,6 +8395,7 @@ else if(onGround && surfaceDep){
   let flightsByCid = new Map();
   let inflightXp = new Map();
   let resortTimers = { dep:null, arr:null };
+  let runwayQueues = new Map();
 
   function setupAirportView(icao){
      if(airportBoards.has(icao)) return airportBoards.get(icao);
@@ -7622,7 +8662,8 @@ else if(onGround && surfaceDep){
       dToPlanNm: null,
       dFromPlanNm: null,
       status: { phase:"UNK", rank:99, text:"—", cls:"info", finished:false },
-      details:null, stats:null, exp:null
+      details:null, stats:null, exp:null,
+      smartAlt: null // Placeholder
     };
   }
 
@@ -7784,8 +8825,10 @@ else if(onGround && surfaceDep){
   async function refresh(){
     try{
       const data = await fetchFeed();
+      const nowT = Date.now();
       currentVatsimData = data;
       renderEpoch++;
+          runwayQueues.clear(); // Reset queues for this cycle
 
       lastFeedTs = data?.general?.update_timestamp ? new Date(data.general.update_timestamp) : null;
 
@@ -7798,8 +8841,23 @@ else if(onGround && surfaceDep){
 
       // Pre-process positions for next loop
       for(const p of pilots){
-         nextPrev.set(String(p.cid), { alt:Number(p.altitude||0), lat:Number(p.latitude), lon:Number(p.longitude), t: Date.now() });
-       }
+         // --- LEVEL FLIGHT STREAK CALCULATION ---
+         const prev = prevPilotStates.get(String(p.cid));
+         const vr = computeVerticalRateFpm(prev, p.altitude, nowT);
+         // Ist er *jetzt gerade* level (< 200 fpm)?
+         const isInstLevel = (vr !== null && Math.abs(vr) < 200);
+         // Wenn ja: Alten Streak erhöhen. Wenn nein: Reset auf 0.
+         const newStreak = isInstLevel ? ((prev?.levelStreak || 0) + 1) : 0;
+
+         nextPrev.set(String(p.cid), { alt:Number(p.altitude||0), lat:Number(p.latitude), lon:Number(p.longitude), t: nowT, levelStreak: newStreak });
+         // History Buffer füllen (für Backtracking)
+         const cidStr = String(p.cid);
+         if(!pilotHistory.has(cidStr)) pilotHistory.set(cidStr, []);
+         const histArr = pilotHistory.get(cidStr);
+         histArr.push({ lat:Number(p.latitude), lon:Number(p.longitude), gs:Number(p.groundspeed||0), hdg:Number(p.heading||0), t:Date.now() });
+         // Behalte nur die letzten ~3-4 Minuten (bei 15s Takt sind das ~15 Einträge)
+         if(histArr.length > 20) histArr.shift();
+          }
 
       // LOOP THROUGH ALL CONFIGURED AIRPORTS
       for(const airportIcao of settings.airports){
@@ -7831,8 +8889,16 @@ else if(onGround && surfaceDep){
               continue;
             }
 
+          // --- SMART ALTITUDE CALCULATION ---
+          // Wir holen uns den Streak, den wir oben im ersten Loop berechnet haben
+          const curState = nextPrev.get(String(p.cid));
+          // Safety Check: Erst wenn 3x in Folge level (ca. 45sek), gilt er als "Stabil" für FL-Anzeige
+          const isStableLevel = (curState && curState.levelStreak >= 2);
+          const smartAlt = getSmartAltitude(p.altitude, p.qnh_i_hg, p.longitude, isStableLevel);
+
             if(dep === focus){
               const f = buildFlightObjectFromPilot(p);
+              f.smartAlt = smartAlt; // <--- Zuweisung
               f.status = classifyFlight(p, "dep");
               if(f.status.cls === "hidden") continue;
 
@@ -7843,6 +8909,18 @@ else if(onGround && surfaceDep){
               applyDestEtaForDepFlight(f);
               applyCachedXpIfAvailable(f);
               if(!(settings.hideDeparturesFinished && f.status.finished)){
+
+                // NEU: Logge JEDEN Abflug, egal welcher Status (Gate, Taxi, Airborne)
+                logCalcDebug("DEP_SNAPSHOT", f.cid, f.callsign, {
+                    board: "DEP",
+                    phase: f.status.phase,
+                    std: f.stdText,
+                    etd: f.etdText,
+                    destEta: f.destEtaText,
+                    rwDist: f.rwDistM,
+                    taxiDist: f.rwTaxiDistM
+                }, f.etdTs);
+
                 deps.push(f);
                 if(!flightsByCid.has(String(f.cid))) flightsByCid.set(String(f.cid), []);
                 flightsByCid.get(String(f.cid)).push(f);
@@ -7853,7 +8931,7 @@ else if(onGround && surfaceDep){
               const f = buildFlightObjectFromPilot(p);
               // Attach back-reference to pilot on the flight object so classifyFlight/ETA calcs can share data
               f.pilot = p; // (already done in buildFlightObjectFromPilot but ensuring consistency)
-
+              f.smartAlt = smartAlt; // <--- Zuweisung
               f.status = classifyFlight(p, "arr");
               if(focusAp && isFinite(p.latitude) && isFinite(p.longitude)) f.dToFocusNm = haversineNm(Number(p.latitude), Number(p.longitude), focusAp.latitude, focusAp.longitude);
               const depAp = getAirport(dep);
@@ -7861,6 +8939,18 @@ else if(onGround && surfaceDep){
               applyEtaForFlight(f, focusAp, "arr");
               applyCachedXpIfAvailable(f);
               if(!(settings.hideArrivalsLanded && f.status.finished)){
+
+                // NEU: Logge JEDE Ankunft (auch gelandete)
+                logCalcDebug("ARR_SNAPSHOT", f.cid, f.callsign, {
+                    board: "ARR",
+                    phase: f.status.phase,
+                    etaPlanned: f.etaPlannedTs,
+                    etaDyn: f.etaTs,
+                    etaText: f.etaText,
+                    distNm: f.dToFocusNm,
+                    arrRwy: f.arrRwyDes
+                }, f.etaTs);
+
                 arrs.push(f);
                 if(!flightsByCid.has(String(f.cid))) flightsByCid.set(String(f.cid), []);
                 flightsByCid.get(String(f.cid)).push(f);
@@ -7921,6 +9011,11 @@ else if(onGround && surfaceDep){
       updateAirportRunwayInfo(atisList);
 
       prevPilotStates = nextPrev;
+      // Prune Pilot History (tote CIDs entfernen)
+      const histNow = Date.now();
+      for(const [k, arr] of pilotHistory){
+          if(arr.length > 0 && (histNow - arr[arr.length-1].t) > 10 * 60000) pilotHistory.delete(k);
+      }
       pruneStatusMemory();
           pruneGateMem();
           pruneEtdMemory();
@@ -7928,6 +9023,9 @@ else if(onGround && surfaceDep){
 
       // Finally render the active one
       await renderBoardsFromStore();
+
+      // Flush Logs if recording
+      if(isDebugRecording) flushDebugLog();
 
       requestXpForVisibleFlights();
 
@@ -7947,7 +9045,10 @@ else if(onGround && surfaceDep){
   }
 
   function updateUtcClock(){
-    utcClockEl.textContent = new Date().toISOString().slice(11,19);
+    const timeStr = new Date().toISOString().slice(11,19);
+    if(utcClockEl) utcClockEl.textContent = timeStr;
+    const mobileClock = document.getElementById("utcClockMobile");
+    if(mobileClock) mobileClock.textContent = timeStr;
     if(lastFeedTs){
       const ageSec = (Date.now() - lastFeedTs.getTime())/1000;
       feedAge.textContent = `${Math.max(0, Math.round(ageSec))}s`;
@@ -8023,7 +9124,7 @@ else if(onGround && surfaceDep){
     loadFlightStateCache();
     applyLanguage();      // sets UI + sort options + headers + legend
     setFeedStatus({ ok:true, msg:"Feed: …", ageSec:null });
-
+    handleInfoModal();
         await initTabs();
     await refresh();
     startLoop();
