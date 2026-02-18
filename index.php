@@ -204,18 +204,18 @@ if (isset($_POST['action']) && $_POST['action'] === 'save_debug') {
     thead th { text-align: left; color: var(--text-muted); font-weight: 600; font-size: 11px; text-transform: uppercase; letter-spacing: 0.05em; padding: 12px 8px; border-bottom: 1px solid var(--glass-border); background: rgba(15, 17, 21, 0.95); position: sticky; top: 0; z-index: 10; backdrop-filter: blur(10px); }
 /* --- TABLE STYLING OPTIMIZED --- */
     /* Hardware-Beschleunigung erzwingen und Easing verbessern */
-    tbody tr { 
+    tbody tr {
         position: relative; /* Wichtig für Z-Index */
-        transition: background 0.2s, transform 0.5s cubic-bezier(0.25, 1, 0.5, 1), opacity 0.3s; 
+        transition: background 0.2s, transform 0.5s cubic-bezier(0.25, 1, 0.5, 1), opacity 0.3s;
         will-change: transform, opacity; /* GPU Hint */
-        border-bottom: 1px solid rgba(255,255,255,0.03); 
+        border-bottom: 1px solid rgba(255,255,255,0.03);
         /* Progress Bar Logic bleibt */
-        background-image: var(--bg-prog, none); 
-        background-size: var(--prog-pct, 0%) 1.5px; 
-        background-repeat: no-repeat; 
-        background-position: var(--prog-pos, bottom left); 
+        background-image: var(--bg-prog, none);
+        background-size: var(--prog-pct, 0%) 1.5px;
+        background-repeat: no-repeat;
+        background-position: var(--prog-pos, bottom left);
     }
-    
+
     /* Rows, die sich bewegen, bekommen höhere Prio */
     tbody tr.is-moving {
         z-index: 10;
@@ -224,17 +224,17 @@ if (isset($_POST['action']) && $_POST['action'] === 'save_debug') {
     }
 
     /* Sanfteres Ausblenden beim Entfernen */
-    tbody tr.removing { 
-        opacity: 0; 
-        transform: scale(0.95); 
-        pointer-events: none; 
-        z-index: 0; 
+    tbody tr.removing {
+        opacity: 0;
+        transform: scale(0.95);
+        pointer-events: none;
+        z-index: 0;
     }
-    
+
     /* Sanfteres Einblenden */
-    tbody tr.adding { 
-        opacity: 0; 
-        transform: translateY(15px) scale(0.98); 
+    tbody tr.adding {
+        opacity: 0;
+        transform: translateY(15px) scale(0.98);
     }
     tbody tr.prog-ltr { --bg-prog: linear-gradient(to right, var(--prog-color), var(--prog-color)); --prog-pos: bottom left; }
     tbody tr.prog-rtl { --bg-prog: linear-gradient(to left, var(--prog-color), var(--prog-color)); --prog-pos: bottom right; }
@@ -873,7 +873,7 @@ color: var(--text-muted);
   const REX_RULES_URL = "rex_rwys.json";
   const VATSIM_DATA_URL = "https://data.vatsim.net/v3/vatsim-data.json";
   const CORE_API_BASE = "https://api.vatsim.net/v2";
-  const CORS_PROXY = "https://vfids.marcelsemelka.workers.dev/?url=";
+  const CORS_PROXY = "";
   // STRATEGIE-KETTE:
   // 1. null = Direktverbindung (Schnellster Weg, da Overpass CORS unterstützt)
   // 2. Public Proxies (Falls direkt fehlschlägt)
@@ -1345,7 +1345,7 @@ const DEP_TAXI_GATE_RESET_MS = 90 * 1000;  // if stationary at a gate for 90s ->
 const TAKEOFF_TAXI_MIN_MS = 45 * 1000;         // must have been taxiing for a while
 const TAKEOFF_FROM_TAXI_GRACE_MS = 2 * 60 * 1000; // last taxi seen window
 const TAKEOFF_GS_KTS = 55;                     // fast ground roll / lift-off hint
-const TAKEOFF_MAX_AGL_FT = 2200;               // still close to ground shortly after lift-off
+const TAKEOFF_MAX_AGL_FT = 1400;               // still close to ground shortly after lift-off
 
 // Keep TAKEOFF visible briefly to avoid TAXI -> DEPARTING skip due to noisy samples.
 const TAKEOFF_HOLD_MS = 55 * 1000;
@@ -1436,7 +1436,7 @@ const GATE_JITTER_GRACE_MS = 20 * 1000;    // kurzzeitig minimal bewegt -> Gate 
     },
 
     async save(key, data) {
-			// IndexedDB (Wait to ensure consistency)
+                        // IndexedDB (Wait to ensure consistency)
         try {
             await idbKeyval.set(key, data);
         } catch (e) {
@@ -1589,25 +1589,25 @@ const GATE_JITTER_GRACE_MS = 20 * 1000;    // kurzzeitig minimal bewegt -> Gate 
           for(const ap of airportIndex.byIcao.values()) {
               // Einfacher Match auf ICAO oder IATA
               const match = ap.icao.startsWith(val) || (ap.iata && ap.iata.startsWith(val));
-              
+
               if(match) {
                   const div = document.createElement("div");
                   div.className = "autocomplete-item";
                   const locStr = [ap.city, ap.country].filter(Boolean).join(", ");
-				  div.innerHTML = `<strong>${escapeHtml(ap.icao)}</strong> / ${escapeHtml(ap.iata || "-")} <span class="loc">${escapeHtml(locStr)}</span><br><span style="font-size:10px;opacity:0.6">${escapeHtml(ap.name)}</span>`;
-                  
-                  div.addEventListener("mousedown", (e) => { 
-                      e.preventDefault(); 
-                      input.value = ap.icao; 
-                      list.classList.remove("open"); 
-                      validate(); 
+                                  div.innerHTML = `<strong>${escapeHtml(ap.icao)}</strong> / ${escapeHtml(ap.iata || "-")} <span class="loc">${escapeHtml(locStr)}</span><br><span style="font-size:10px;opacity:0.6">${escapeHtml(ap.name)}</span>`;
+
+                  div.addEventListener("mousedown", (e) => {
+                      e.preventDefault();
+                      input.value = ap.icao;
+                      list.classList.remove("open");
+                      validate();
                   });
                   list.appendChild(div);
                   count++;
                   if(count >= 10) break; // Limit Results
               }
           }
-          
+
           if(count > 0) list.classList.add("open");
       });
 
@@ -1946,8 +1946,8 @@ const GATE_JITTER_GRACE_MS = 20 * 1000;    // kurzzeitig minimal bewegt -> Gate 
           }
 
           // 2. LocalStorage leeren
-          localStorage.clear(); 
-          
+          localStorage.clear();
+
           // 3. Reload erzwingen
           location.reload();
       }
@@ -2218,9 +2218,9 @@ const COL_META = {
             iata: d[3] || "",
             city: d[4] || "",
             name: d[5] || "",
-			country: d[6] || ""
+                        country: d[6] || ""
         };
-        
+
         airportIndex.byIcao.set(icao, ap);
         if(ap.iata) airportIndex.byIata.set(ap.iata, icao);
         gridAdd(ap);
@@ -3417,7 +3417,7 @@ function updateStationaryState(cid, lat, lon, gsKts){
     return { mem: m, isStationary: false, moveM: null, taxiSure, uncertain };
   }
 
-  // 1. High Speed Check: Sofort "rolling" wenn GS hoch (> 8kts)
+  // sofort "rolling" wenn GS hoch
   if(gsKts > TAXI_HIDE_GS_KTS){
     taxiSure = true;
     m.samples = [{ lat, lon, t: now }];
@@ -3431,7 +3431,7 @@ function updateStationaryState(cid, lat, lon, gsKts){
   const last  = m.samples[m.samples.length - 1];
   const dt    = last.t - first.t;
 
-  // 2. Recent-Move Check (Pushback/Taxi schneller erkennen)
+  // Recent-move check (Pushback/Taxi schneller erkennen)
   let recentMoveM = null;
   for(let i=m.samples.length-1; i>=0; i--){
     if(now - m.samples[i].t >= RECENT_MOVE_WINDOW_MS){
@@ -3439,30 +3439,16 @@ function updateStationaryState(cid, lat, lon, gsKts){
       break;
     }
   }
-
-  // FIX A: Jitter-Schutz beim Login
-  // Wenn GS < 2kts ist, erlauben wir größere Positions-Sprünge (bis 35m), bevor wir "Taxi" schreien.
-  // Das fängt das "Zurechtruckeln" beim Spawn ab.
-  const moveThreshold = (gsKts < 2) ? 35 : RECENT_MOVE_MAX_M;
-
-  if(recentMoveM != null && recentMoveM > moveThreshold){
+  if(recentMoveM != null && recentMoveM > RECENT_MOVE_MAX_M){
     taxiSure = true;
     return { mem: m, isStationary: false, moveM: recentMoveM, taxiSure, uncertain:false };
   }
 
-  // 3. Uncertainty Phase (< 25s Daten)
   if(dt < STATIONARY_MIN_MS){
-    uncertain = true; 
-    
-    // FIX B: "Unschuldig bis zum Beweis des Gegenteils"
-    // Wenn die GS quasi 0 ist (< 1kt), nehmen wir VORLÄUFIG an, dass er steht.
-    // Das erlaubt resolveGateForCid, sofort das Gate zu finden, statt 25s zu warten.
-    const assumeStationary = (gsKts < 1);
-    
-    return { mem: m, isStationary: assumeStationary, moveM: null, taxiSure: false, uncertain };
+    uncertain = true; // noch nicht genug Daten für "Gate sicher"
+    return { mem: m, isStationary: false, moveM: null, taxiSure:false, uncertain };
   }
 
-  // 4. Standard Stationär-Prüfung
   const moveM = haversineMeters(first.lat, first.lon, last.lat, last.lon);
   const isStationary = (moveM <= STATIONARY_MAX_MOVE_M) && (gsKts <= STATIONARY_MAX_GS_KTS);
 
@@ -3504,41 +3490,26 @@ function resolveGateForCid(cid, lat, lon, gsKts, idx, cacheIcao){
   }else{
     // Stationär
     if(!idx){
-      // FIX: Wenn kein idx geladen ist (erster Start), aber wir bereits ein stabiles Gate haben (z.B. aus Cache), zeige es trotzdem.
+      // FIX: Wenn kein idx geladen ist, aber wir bereits ein stabiles Gate haben (z.B. aus Cache), zeige es trotzdem.
       if(mem.stable){
         mem.stableSeenAt = now;
         out = mem.stable;
-      } else {
-         // NEU: Versuch, den Index synchron aus dem globalen Cache zu holen, falls 'idx' param null war
-         // (Manchmal ist der Index schon da, wurde aber nicht übergeben)
-         const globalIdx = gateIndexByIcao.get(cacheIcao);
-         if(globalIdx) {
-             const hit = findNearestGate(globalIdx, lat, lon, GATE_MATCH_RADIUS_M);
-             if(hit) {
-                 // Sofort adoptieren ohne Pending-Logik beim ersten Treffer
-                 mem.stable = hit.gate;
-                 mem.stableSeenAt = now;
-                 out = mem.stable;
-             }
-         }
-         if(!out) out = null;
+      }else{
+        out = null;
       }
     }else{
       const hit = findNearestGate(idx, lat, lon, GATE_MATCH_RADIUS_M);
       const cand = hit ? hit.gate : null;
 
       if(!cand){
-        // Wenn wir das Gate verloren haben (GPS Drift), behalten wir das alte kurzzeitig
         if(mem.stable && (now - mem.stableSeenAt) < GATE_LOST_GRACE_MS) out = mem.stable;
         else out = null;
       }else if(mem.stable && mem.stable.id === cand.id){
-        // Gate bestätigt
         mem.stableSeenAt = now;
         mem.pending = null;
         mem.pendingSince = 0;
         out = mem.stable;
       }else{
-        // Neues Gate Kandidat -> Hysterese Check
         if(mem.pending && mem.pending.id === cand.id){
           if((now - mem.pendingSince) >= GATE_CONFIRM_MS){
             mem.stable = cand;
@@ -3553,7 +3524,6 @@ function resolveGateForCid(cid, lat, lon, gsKts, idx, cacheIcao){
         }
 
         if(!out){
-          // Altes Gate anzeigen solange das neue noch "pending" ist
           if(mem.stable && (now - mem.stableSeenAt) < GATE_STICKY_MS) out = mem.stable;
           else out = null;
         }
@@ -4351,60 +4321,63 @@ function saveRunwayCache(obj){
       if(el?.type !== "way") continue;
       const geom = Array.isArray(el.geometry) ? el.geometry : [];
       if(geom.length < 2) continue;
-      
       const a = geom[0];
       const b = geom[geom.length - 1];
-      if(!a || !b) continue;
+      if(!a || !b || !isFinite(a.lat) || !isFinite(a.lon) || !isFinite(b.lat) || !isFinite(b.lon)) continue;
 
       const tags = el.tags || {};
       const ref = String(tags.ref || tags.name || "").trim().toUpperCase();
       const pair = parseRunwayRefPair(ref);
 
-      // Designators raten oder parsen
+      // If no usable ref, derive best-effort numeric designators from geometry bearing.
+      // This avoids leaking internal fallback IDs into UI (e.g. "RW:509962199:A").
       const brgAB = bearingDeg(a.lat, a.lon, b.lat, b.lon);
       const guessA = bearingToRunwayDesignator(brgAB);
       const guessB = bearingToRunwayDesignator((brgAB + 180) % 360);
 
+      // Keep original pair when present; otherwise use guessed numeric designators.
+      // (Parallels without L/C/R will remain ambiguous, but still far better than internal IDs.)
       const rwAraw = pair ? pair[0] : (guessA || `RW:${el.id}:A`);
       const rwBraw = pair ? pair[1] : (guessB || `RW:${el.id}:B`);
 
-      let rwA = normalizeRunwayDesignator(rwAraw) || String(rwAraw).trim().toUpperCase();
-      let rwB = normalizeRunwayDesignator(rwBraw) || String(rwBraw).trim().toUpperCase();
+      // Normalize where possible for consistency ("5" -> "05")
+    let rwA = normalizeRunwayDesignator(rwAraw) || String(rwAraw).trim().toUpperCase();
+    let rwB = normalizeRunwayDesignator(rwBraw) || String(rwBraw).trim().toUpperCase();
 
-      // EDDB Fix
-      if (currentAirportIcao === "EDDB") {
+    // --- HARDCODED FIXES FOR OUTDATED OSM DATA ---
+    // EDDB hat von 07/25 auf 06/24 gewechselt. OSM liefert oft noch 07/25.
+    if (currentAirportIcao === "EDDB") {
         const map = { "07L":"06L", "07R":"06R", "25L":"24L", "25R":"24R", "07":"06", "25":"24" };
         if (map[rwA]) rwA = map[rwA];
         if (map[rwB]) rwB = map[rwB];
-      }
-      
-      // --- UPDATE: INTERMEDIATE POINTS ---
-      // Wir fügen JEDEN Punkt der Geometrie als valides Ziel für BEIDE Richtungen hinzu.
-      // Damit kann der Worker Intersections finden.
-      
-      // Wir samplen die Geometrie, um nicht unnötig viele Punkte zu haben (alle ~40m reicht)
-      // Die Original-Geometrie von OSM ist oft sehr dicht.
-      const simplified = simplifyGeometryPoints(geom, 40); 
-
-      for(const p of simplified) {
-          // Wir fügen den Punkt für BEIDE Designators hinzu.
-          // Eine Intersection auf der 25C ist auch eine Intersection auf der 07C.
-          endpoints.push({ 
-              designator: rwA, 
-              lat: p.lat, 
-              lon: p.lon, 
-              isThreshold: (p === simplified[0]) // Markierung für Start
-          });
-          endpoints.push({ 
-              designator: rwB, 
-              lat: p.lat, 
-              lon: p.lon, 
-              isThreshold: (p === simplified[simplified.length-1]) // Markierung für Ende
-          });
-      }
     }
-    
-    return endpoints;
+    // ---------------------------------------------
+
+      const degA = runwayDesignatorToDeg(rwA);
+      const degB = runwayDesignatorToDeg(rwB);
+
+      // Decide which designator corresponds to the A->B bearing
+      // If unknown, default: rwA at first point, rwB at last point
+      let aIsRwA = true;
+      if(degA != null && degB != null){
+        const dA = angleDiffDeg(brgAB, degA);
+        const dB = angleDiffDeg(brgAB, degB);
+        aIsRwA = dA <= dB;
+      }
+
+      const ep1 = aIsRwA
+        ? { epId:`way:${el.id}:${rwA}`, wayId: el.id, runwayRef: ref || "", designator: rwA, lat: a.lat, lon: a.lon }
+        : { epId:`way:${el.id}:${rwB}`, wayId: el.id, runwayRef: ref || "", designator: rwB, lat: a.lat, lon: a.lon };
+      const ep2 = aIsRwA
+        ? { epId:`way:${el.id}:${rwB}`, wayId: el.id, runwayRef: ref || "", designator: rwB, lat: b.lat, lon: b.lon }
+        : { epId:`way:${el.id}:${rwA}`, wayId: el.id, runwayRef: ref || "", designator: rwA, lat: b.lat, lon: b.lon };
+
+      endpoints.push(ep1, ep2);
+    }
+
+    // Dedup identical endpoint IDs (just in case)
+    const seen = new Set();
+    return endpoints.filter(e => (seen.has(e.epId) ? false : (seen.add(e.epId), true)));
   }
 
  async function fetchOverpassRunwaysForAirport(icao){
@@ -4854,29 +4827,31 @@ function getSmartAltitude(altitude, qnhHg, latitude, longitude, isLevelFlight) {
 
     // 2. HARD LIMIT (Weltweit)
     // Über 18.000 ft fliegen 99% der Welt Flight Level.
+    // Das spart Rechenzeit für die bounding boxes.
     if (altitude >= 18000) return calculateFlightLevelString(altitude, qnhHg);
 
     // 3. REGIONALE TRANSITION ALTITUDE ERMITTELN
+    // Wir holen uns den Grenzwert für den aktuellen Ort (z.B. 5000, 10000, 14000)
     const localTA = getRegionTransitionAltitude(latitude, longitude);
 
     // 4. MATH-CHECK (Der "Detektiv")
+    // Wenn das Flugzeug stabil fliegt (Level Flight), prüfen wir, ob die Zahl "glatt" ist.
+    // Dieser Check hat Vorrang vor der Geografie, da er Pilotenfehler (vergessenes Umschalten) aufdeckt.
     if (isLevelFlight && isFinite(qnhHg)) {
         const detectedMode = detectPressureSetting(altitude, qnhHg);
 
         if (detectedMode === "STD") {
-            // FIX: Auch wenn es mathematisch ein Flight Level ist:
-            // Wenn wir unterhalb der lokalen Transition Altitude sind (mit Puffer),
-            // müssen wir Feet anzeigen (Vorschrift USA 18k, etc.)
-            if (altitude < (localTA - 500)) {
-                 return Math.round(altitude) + " ft";
-            }
             return calculateFlightLevelString(altitude, qnhHg);
         } else if (detectedMode === "QNH") {
             return Math.round(altitude) + " ft";
         }
+        // Wenn "UNK" (unklar), fallen wir weiter zur Geografie-Regel
     }
 
     // 5. GEOGRAFIE-LOGIK (Fallback)
+    // Wenn wir steigen/sinken oder der Math-Check unsicher war:
+    // Wir vergleichen einfach mit der lokalen Transition Altitude.
+
     // Puffer von 500ft, um Flackern genau an der Grenze zu vermeiden
     if (altitude > (localTA + 500)) {
         return calculateFlightLevelString(altitude, qnhHg);
@@ -5432,12 +5407,12 @@ function pruneArrActualTimeMem(){
 // --- ASYNC POLLING FETCH (Base64 Mode) ---
 async function requestOverpassData(type, icao, lat, lon) {
     const apiUrl = `${DB_CONFIG.apiUrl}?action=osm_proxy`;
-    
+
     const formData = new FormData();
     formData.append('req_type', type); // 'gates', 'taxiways', 'runways', 'holding'
     formData.append('icao', icao);
     // Koordinaten senden wir mit, damit der Server den Suchradius kennt
-    formData.append('lat', lat); 
+    formData.append('lat', lat);
     formData.append('lon', lon);
 
     const poll = async (attempt = 1) => {
@@ -5446,7 +5421,7 @@ async function requestOverpassData(type, icao, lat, lon) {
         const res = await fetch(apiUrl, { method: 'POST', body: formData, cache: 'no-store' });
 
         if (res.status === 200) return await res.json();
-        
+
         // 202 = Worker arbeitet noch
         if (res.status === 202 || res.status === 502 || res.status === 500) {
             if(attempt < 3) console.log(`[Overpass] Server busy, waiting... (${attempt})`);
@@ -5472,12 +5447,12 @@ async function fetchJsonPossiblyEmpty(url, { useProxy=false, retryEmpty=3, retry
       const promises = targets.map(async (targetUrl) => {
           const safeUrl = targetUrl + (targetUrl.includes('?') ? '&' : '?') + `_=${Date.now()}`;
           const res = await fetch(safeUrl);
-          
+
           // --- FIX: 404 ist KEIN Fehler für Promise.any, sondern ein Ergebnis ---
           if (res.status === 404) {
               return { __status: 404, __empty: true };
           }
-          
+
           if(!res.ok) {
               const err = new Error(`HTTP ${res.status}`);
               err.status = res.status;
@@ -5487,8 +5462,8 @@ async function fetchJsonPossiblyEmpty(url, { useProxy=false, retryEmpty=3, retry
           if(!text || !text.trim()) return { __empty:true, __status: res.status };
           return JSON.parse(text);
       });
-      
-      try { return await Promise.any(promises); } 
+
+      try { return await Promise.any(promises); }
       catch (aggErr) { throw new Error("All fetch strategies failed"); }
     };
 
@@ -5509,9 +5484,9 @@ async function fetchJsonPossiblyEmpty(url, { useProxy=false, retryEmpty=3, retry
                 if (err.status === 429) {
                     // Backend busy, kurz warten
                     await new Promise(r => setTimeout(r, 1000 * attempt));
-                    continue; 
+                    continue;
                 }
-                throw err; 
+                throw err;
             }
         }
         throw new Error("Backend unavailable");
@@ -5519,7 +5494,7 @@ async function fetchJsonPossiblyEmpty(url, { useProxy=false, retryEmpty=3, retry
 
     // --- CASE B: External APIs ---
     for(let attempt=1; attempt<=retryEmpty; attempt++){
-      const out = await limiter.enqueue(runOnce); 
+      const out = await limiter.enqueue(runOnce);
       // 404 sofort durchreichen
       if(out && out.__status === 404) return out;
 
@@ -5535,13 +5510,13 @@ async function fetchJsonPossiblyEmpty(url, { useProxy=false, retryEmpty=3, retry
   function updateApiQueuePill(){
     // Wir zählen, wie viele CIDs aktuell im "Warte-Modus" sind
     const backendCount = pendingBackendRequests.size;
-    
+
     // Status der internen Frontend-Bremse (nur für Debugging interessant)
     const frontendBusy = limiter.inFlight || backendLimiter.inFlight;
 
     if (backendCount > 0) {
         // Wir warten auf den Worker -> Orange / Blau
-        apiDot.className = "dot warn"; 
+        apiDot.className = "dot warn";
         // Text z.B.: "API Q: 12" (12 Piloten werden geladen)
         apiText.textContent = `Worker Q: ${backendCount}`;
         apiExtra.textContent = frontendBusy ? "" : "";
@@ -5553,7 +5528,7 @@ async function fetchJsonPossiblyEmpty(url, { useProxy=false, retryEmpty=3, retry
     }
   }
   setInterval(updateApiQueuePill, 1000);
-  
+
   function syncPendingQueue(allVisibleFlights) {
     const visibleCids = new Set(allVisibleFlights.map(f => String(f.cid)));
     let changed = false;
@@ -5593,16 +5568,16 @@ async function fetchJsonPossiblyEmpty(url, { useProxy=false, retryEmpty=3, retry
 
 async function getMemberStats(cid){
     const entry = getCacheEntry(cid);
-    
+
     // 1. Valid Data Cache Hit
     if(entry?.stats && isFresh(entry.statsTs, settings.memberTtlStatsMs)) {
-        pendingBackendRequests.delete(String(cid)); 
+        pendingBackendRequests.delete(String(cid));
         return entry.stats;
     }
-    
+
     // 2. Negative Cache Hit (User existiert nicht) - Schutzschild
     if(isCoolingDown(entry)) {
-        pendingBackendRequests.delete(String(cid)); 
+        pendingBackendRequests.delete(String(cid));
         return null;
     }
 
@@ -5629,9 +5604,9 @@ async function getMemberStats(cid){
       // Backend sagt "queued" (202) -> Warten auf Worker
       if(stats && stats.status === "queued") {
           // Drin lassen in pendingBackendRequests, damit Pill zählt
-          return null; 
+          return null;
       }
-      
+
       // Echte Daten
       pendingBackendRequests.delete(String(cid));
       upsertCacheEntry(cid, { stats, statsTs: Date.now(), status404Ts: null });
@@ -5683,13 +5658,6 @@ async function getMemberStats(cid){
     function roundToMinute(ts){
     if(ts == null || !isFinite(ts)) return null;
     return Math.round(ts / MIN_MS) * MIN_MS;
-  }
-  
-  function formatRemTime(mins) {
-      if (mins < 60) return mins + " Min.";
-      const h = Math.floor(mins / 60);
-      const m = String(mins % 60).padStart(2, '0');
-      return `${h}:${m} h`;
   }
 
   const SURFACE_RADIUS_NM = 7.5; // count only aircraft on ground within this radius around airport ref point
@@ -6171,104 +6139,220 @@ async function getMemberStats(cid){
       });
   }
 
-// Helper: Prüft ob wir "neu geladen" haben (Flug ist kalt) oder ob wir ihn schon kennen
-  function getPilotSessionState(cid, now) {
-      // Wir nutzen taxiMem als "Session Store"
-      let tm = taxiMem.get(String(cid));
-      if (!tm) {
-          // Erster Kontakt in dieser Session
-          return { known: false, duration: 0 };
+  // For taxiing departures: runway-threshold based ETD:
+  //   remaining = (distance_to_threshold / avg_taxi_speed) + lineup_buffer + queue_delay
+  function computeEtdForTaxi(stdTs, now=Date.now(), flight=null){
+        const MAX_AHEAD_MS = 120 * MIN_MS;   // cap: avoid insane ETDs
+
+    let predicted = null;
+
+    // Ensure runway index (async). We still provide a fallback if not ready.
+    const focusIcao = normalizeCode(currentAirportIcao || "");
+    const rIdx = focusIcao ? (runwayIndexByIcao.get(focusIcao) || null) : null;
+    if(focusIcao && !rIdx){
+      ensureRunwayIndexForIcao(focusIcao).catch(()=>{});
+    }
+    // Ensure HotZones (Lineup Segments)
+    ensureHotZoneIndexForIcao(focusIcao).catch(()=>{});
+
+    // Taxi age & smoothed ground-speed (reduces early optimism and ETD "creep to the right")
+      const tm = flight ? (taxiMem.get(String(flight.cid)) || null) : null;
+    // Early taxi overhead (pushback, stop&go, hold-short) that decays as we observe taxi time.
+    // This specifically addresses "ETD too optimistic at the beginning, then shifts later".
+    const taxiAgeSec = (tm?.taxiSince && now >= tm.taxiSince) ? Math.max(0, (now - tm.taxiSince) / 1000) : 0;
+        let startupExtraSec = tm
+      ? Math.max(0, Math.min(220, 190 - taxiAgeSec * 0.65))  // ~+3:10 at start -> ~0 after ~5 min (more conservative for pushback)
+      : 170;
+
+    // Dynamic buffer: smaller when very close to the entry / already queued.
+    function etdLineupBufferSec(distM, gsKts, stopped, hasQueueAhead){
+      // Base buffer derived from historical data could go here, but for "final approach to runway"
+      // we stick to physics/geometry.
+      let buf = 45;
+      if(isFinite(distM)){
+        if(distM <= 60) buf = 25;
+        else if(distM <= 120) buf = 35;
+        else if(distM <= 220) buf = 40;
+        else if(distM <= 420) buf = 50;
+        else if(distM >= 1400) buf = 70;
       }
-      // Wie lange verfolgen wir ihn schon im "TAXI"-Status?
-      const duration = (tm.taxiSince && now >= tm.taxiSince) ? (now - tm.taxiSince)/1000 : 0;
-      return { known: true, duration: duration };
-  }
+      // Add conservatism during the first ~2 minutes of taxi (before runway intent stabilizes).
+      if(taxiAgeSec > 0 && taxiAgeSec < 60) buf += 18;
+      else if(taxiAgeSec >= 60 && taxiAgeSec < 120) buf += 10;
+      if(stopped && isFinite(distM) && distM <= 120) buf -= 8;
+      if(isFinite(gsKts) && gsKts >= 25 && isFinite(distM) && distM <= 220) buf -= 10;
+      if(hasQueueAhead) buf += 8;
+      return Math.max(20, Math.min(120, Math.round(buf)));
+    }
 
-  // --- DIE NEUE ETD BERECHNUNG ---
-  function computeEtdForTaxi(stdTs, now = Date.now(), flight = null) {
-      if (!flight || !flight.pilot) return (stdTs && stdTs > now) ? stdTs : now + 600000;
+    // Primary: runway-axis based (threshold + intersection aware)
+    if(rIdx && flight?.pilot){
+      const active = globalActiveRunways[focusIcao] || null;
+      const tgt = getRunwayTargetForFlight(flight, rIdx, active);
+      const distM = tgt?.taxiDistM;
+      if(isFinite(distM)){
+        // NEW: If the aircraft is already rolling on the runway (after joining via an intersection),
+        // treat remaining distance as “to line-up” (near-zero), not “to threshold”.
+        let distUsedM = distM;
+        try{
+          const gsNow = Number(flight.pilot.groundspeed || 0);
+          const onAxis = !!flight.rwOnAxisStrict;
+          const axisBrg = Number(flight.rwAxisBrg);
+          const trackBrg = Number(flight.rwTrackBrg);
+          if(onAxis && isFinite(axisBrg) && isFinite(trackBrg) && isFinite(gsNow)){
+            const dA = angleDiffDeg(trackBrg, axisBrg);
+            const dO = angleDiffDeg(trackBrg, (axisBrg + 180) % 360);
+            const aligned = Math.min(dA, dO) <= ETD_ON_RUNWAY_ALIGN_DEG;
+            const away = dA <= ETD_ON_RUNWAY_ALIGN_DEG; // takeoff direction away from threshold
+            const latM = Number(flight.rwEntryLateralM);
 
-      const cid = String(flight.cid);
-      const gs = Number(flight.pilot.groundspeed || 0);
-      
-      // 1. Daten vom Worker holen
-      let distM = 9999; 
-      let timeSec = null;
-      const geo = geoEtdCache.get(cid);
-      
-      if (geo && isFinite(geo.ts) && geo.ts > now) {
-          // Worker hat einen Pfad gefunden
-          distM = geo.dist;
-          timeSec = (geo.ts - now) / 1000;
-      } else {
-          // Worker hat nichts -> Fallback auf Luftlinie (rwTaxiDistM)
-          // Wir schlagen 50% drauf für Kurven
-          if (flight.rwTaxiDistM) distM = flight.rwTaxiDistM * 1.5;
-      }
-      
-      // Update Flight Object für die Queue-Sortierung
-      flight.rwTaxiDistM = distM;
-
-      // 2. Session Check (Reload Problem fixen)
-      const session = getPilotSessionState(cid, now);
-      
-      // 3. ZONEN-LOGIK
-
-      // ZONE A: RUNWAY (< 90m)
-      // Er ist drauf. Start in Kürze.
-      if (distM < 90) {
-          // Wenn er rollt (>30kts), ist er am Starten -> 0 min
-          if (gs > 30) return now; 
-          // Wenn er steht (Lineup), ca 45 sek.
-          return now + 45000;
-      }
-
-      // ZONE B: THE QUEUE (90m - 550m)
-      // Er steht am Rollhalt.
-      // HIER KEINE "COLD START" PENALTY!
-      // Wenn einer hier steht (Speed 0), wartet er. Er macht keinen Engine Start.
-      if (distM < 550) {
-          // Basis-Zeit: Restweg (ca 1 min) + Puffer (1 min)
-          let etd = now + (60 * 1000) + (60 * 1000);
-          
-          // Wir lassen die Queue-Logik (enforceDepartureQueueing) später die Feinjustierung machen.
-          // Hier geben wir nur eine "Base Baseline" zurück.
-          return etd;
-      }
-
-      // ZONE C: TAXI NETWORK (> 550m)
-      
-      // Reine Fahrzeit (Physik)
-      // Wenn wir keine Worker-Zeit haben, nehmen wir 15kts Durchschnitt
-      let physicsDuration = 0;
-      if (timeSec !== null) {
-          physicsDuration = timeSec * 1000;
-      } else {
-          physicsDuration = (distM / (15 * 0.5144)) * 1000; 
-      }
-
-      // Startup Penalty Logic
-      let startupDelay = 0;
-
-      // Wir bestrafen nur, wenn er WEIT weg ist (> 1500m) UND langsam ist (< 3kts)
-      if (distM > 1500 && gs < 3) {
-          
-          // Szenario 1: Wir kennen ihn schon lange (> 2 Min) im Taxi-Status.
-          // Er hat wohl nur kurz angehalten (Give way, Pushback finish).
-          if (session.known && session.duration > 120) {
-               startupDelay = 60 * 1000; // 1 Min Strafe
-          } 
-          // Szenario 2: Er ist neu ODER steht schon ewig
-          else {
-               // Wir schauen auf den Abstand.
-               // Gate (3km+) -> Viel Strafe (10 Min)
-               // Apron (1.5km) -> Mittel (5 Min)
-               if (distM > 3000) startupDelay = 10 * 60 * 1000;
-               else startupDelay = 5 * 60 * 1000;
+            // Rolling along runway in takeoff direction => ETD must be near-immediate.
+            if(aligned && away && gsNow >= ETD_ON_RUNWAY_GS_MIN_KTS && isFinite(latM)){
+              distUsedM = Math.min(distUsedM, Math.max(0, Math.min(ETD_ON_RUNWAY_AXIS_STRICT_M, latM)));
+              // also remove most of the “startup” padding once already on the runway
+              startupExtraSec = Math.min(startupExtraSec, 12);
+            }
+            // NEW: Rapid ETD countdown if rolling on runway
+            if(aligned && away && gsNow > 15 && onAxisStrict){
+               const rapidCap = (gsNow > 40) ? 30 : 60; // seconds
+               const capTs = now + rapidCap * 1000;
+               // We apply this clamp at the very end
+               flight.__rapidRunwayRoll = capTs;
+            }
+            // Lined-up / very slow on runway axis (common just before takeoff clearance)
+            if(aligned && away && gsNow <= DEP_QUEUE_STOP_GS_KTS && isFinite(latM) && latM <= (ETD_ON_RUNWAY_AXIS_M + 6)){
+              distUsedM = Math.min(distUsedM, Math.max(0, latM));
+              startupExtraSec = Math.min(startupExtraSec, 10);
+            }
           }
-      }
+        }catch{}
 
-      return now + physicsDuration + startupDelay;
+        // Use smoothed track-speed on ground when available; fall back to instantaneous GS.
+        let taxiKts = Number(tm?.speedEma || flight.pilot.groundspeed || 0);
+        if(!(taxiKts >= ETD_TAXI_SPEED_MIN_KTS && taxiKts <= ETD_TAXI_SPEED_MAX_KTS)){
+          taxiKts = ETD_TAXI_SPEED_AVG_KTS;
+        }
+        // Prevent early "sprints" from making ETD unrealistically early.
+        if(taxiAgeSec > 0 && taxiAgeSec < 120){
+          taxiKts = Math.min(taxiKts, 14.5);
+        }
+        const speedMps = taxiKts * 0.514444; // kts -> m/s
+        const stopped = (Number(flight.pilot.groundspeed || 0) <= DEP_QUEUE_STOP_GS_KTS);
+
+        // Queue delay (works for both threshold + intersection "entry keys")
+        const q = getDepartureQueueDelayForFlight(flight, rIdx, tgt?.queueKey);
+        const hasAhead = !!(q && q.ahead > 0);
+
+        // HISTORICAL TAXI TIME FACTOR
+        // If we are still far from the runway, blend in the historical average for this gate/runway.
+        let historicalMs = null;
+        if (tm && tm.gateLat && tm.gateLon) {
+           // We stored gate location when taxi started (see resolveTaxiStatusForCid)
+           historicalMs = TaxiTimeManager.estimate(currentAirportIcao, tm.gateLat, tm.gateLon, tgt.designator);
+        }
+
+        const bufSec = etdLineupBufferSec(distUsedM, Number(flight.pilot.groundspeed || 0), stopped, hasAhead);
+        let physicsSec = (distUsedM / Math.max(2.0, speedMps)) + bufSec + ETD_TAKEOFF_ROLL_SEC + startupExtraSec;
+
+        // Blending Logic:
+        // If we have a historical average (e.g. 12 mins) and we know the flight started taxiing 4 mins ago,
+        // remaining is roughly 8 mins.
+        // As the aircraft gets closer to the runway (distance < 1500m), we fade out history and rely on physics.
+        if (historicalMs && taxiAgeSec > 30 && distUsedM > 800) {
+            const remainingHistSec = Math.max(120, (historicalMs/1000) - taxiAgeSec);
+            // Blend factor: 1.0 at distance > 3000m, 0.0 at distance < 800m
+            const blend = Math.min(1, Math.max(0, (distUsedM - 800) / 2200));
+            physicsSec = (physicsSec * (1-blend)) + (remainingHistSec * blend);
+        }
+
+        // If we are already essentially at the hold short / line-up point and nobody is ahead, bias slightly earlier.
+        const closeBonus = (!hasAhead && stopped && isFinite(distUsedM) && distUsedM <= 80) ? -8 : 0;
+        const sec = Math.max(10, physicsSec + (q?.delaySec || 0) + closeBonus);
+
+        // Return raw ms for stabilizer! Don't round yet.
+        predicted = now + sec * 1000;
+
+        // Apply Rapid Roll Cap
+        if(flight.__rapidRunwayRoll){
+           predicted = Math.min(predicted, flight.__rapidRunwayRoll);
+        }
+        logCalcDebug("ETD_PHYSICS", flight.cid, flight.callsign, {
+            distUsedM,
+            taxiKts,
+            speedMps,
+            bufSec,
+            startupExtraSec,
+            queueDelay: q?.delaySec,
+            historicalMs,
+            taxiAgeSec
+        }, predicted);
+      }
+    }
+
+    // Fallback: keep the old “surface traffic” taxi estimate if runway data isn't ready
+    if(predicted == null){
+      const taxiMin = flight ? estimateTaxiMinutesForFlight(flight) : 4.0;
+      predicted = roundToMinute(now + taxiMin * MIN_MS);
+    }
+
+    // Early-roll guard:
+    // During the first ~1–2 minutes after taxi start (often pushback/initial roll),
+    // the runway-axis distance model can be *way* too optimistic (especially if apron is close to the runway axis).
+    // Use a conservative floor (traffic model + minimal lead) until intent stabilizes,
+    // unless the aircraft is clearly already on/merging onto the runway.
+    if(flight && isFinite(predicted)){
+      const gsNow = Number(flight?.pilot?.groundspeed || 0);
+      // NEW: Rapid Roll Cap is VERY authoritative.
+      if(flight.__rapidRunwayRoll){
+         predicted = Math.min(predicted, flight.__rapidRunwayRoll);
+      }
+      const distToThrM = Number(flight?.rwDistM);
+      const distToEntryM = Number(flight?.rwTaxiDistM);
+      const closeEntry = isFinite(distToEntryM) && distToEntryM <= 260;
+      const nearRunwayArea = isFinite(distToThrM) && distToThrM <= 1100;
+      const runwayStrong = !!(
+        flight.rwOnAxisStrict &&
+        (flight.rwJustMergedOntoAxis || (flight.rwRollingOnAxis && flight.rwTrackAway && gsNow >= ETD_ON_RUNWAY_GS_MIN_KTS))
+      );
+      const allowShortEarly = runwayStrong || (nearRunwayArea && closeEntry);
+
+      const earlyRoll = (taxiAgeSec > 0 && taxiAgeSec < 110) || (!!tm && !tm.taxiConfirmedAt && gsNow >= 2 && gsNow < 14);
+      if(earlyRoll && !allowShortEarly){
+        // FIX: Calculate precise traffic floor based on distance, not rounded minutes
+        // Use default speed of ~15kts (approx 7.7 m/s) if actual speed is erratic
+        const distForFloor = (!tm?.taxiConfirmedAt && flight.rwTaxiDistM) ? flight.rwTaxiDistM : (flight.rwDistM || 2000);
+        const floorSec = (distForFloor / 7.0) + 60; // Distance / Speed + Buffer
+        const trafficFloorTs = now + (floorSec * 1000);
+
+        // Minimal lead: pushback / uncertain intent should never show "immediate" ETD.
+        let floorLeadMs = (gsNow < 9) ? (4 * MIN_MS) : (3 * MIN_MS);
+        const d = Number(flight?.dFromFocusNm);
+        if((!tm?.taxiConfirmedAt && taxiAgeSec < 90) || (isFinite(d) && d < 0.45 && taxiAgeSec < 90)){
+          floorLeadMs = Math.max(floorLeadMs, 6 * MIN_MS);
+        }
+        const hardFloorTs = now + floorLeadMs;
+
+        predicted = Math.max(predicted, trafficFloorTs, hardFloorTs);
+
+        logCalcDebug("ETD_EARLY_FLOOR", flight?.cid, flight?.callsign, {
+            rawPredicted: predicted,
+            trafficMin: floorSec / 60, // KORRIGIERT: Variable definieren
+            trafficFloorTs,
+            hardFloorTs,
+            gsNow
+        }, predicted);
+      }
+    }
+
+    // Apply Rapid Roll Cap (again/final) & General Bounds
+    if(predicted != null && isFinite(predicted)){
+       if(flight && flight.__rapidRunwayRoll){
+           predicted = Math.min(predicted, flight.__rapidRunwayRoll);
+       }
+       // Ensure we are at least X seconds in future
+       predicted = Math.max(now + (ETD_MIN_AHEAD_SEC * 1000), predicted);
+    }
+    return predicted;
   }
 
 
@@ -6661,57 +6745,113 @@ function fmtRegDate(val) {
   function isAirbornePhase(phase){ return AIRBORNE_PHASES.has(String(phase || "").toUpperCase()); }
   function isGroundPhase(phase){ return GROUND_PHASES.has(String(phase || "").toUpperCase()); }
 
- function detectDepartureLineupRwy(p, fp, focusIcao){
+  // Detect "LINEUP" for departures at the focus airport.
+  // Returns: runway designator string (e.g. "26L"), true (lineup but no designator), or null.
+  function detectDepartureLineupRwy(p, fp, focusIcao){
     try{
       if(!p || !fp) return null;
       const lat = Number(p.latitude), lon = Number(p.longitude);
       if(!isFinite(lat) || !isFinite(lon)) return null;
 
-      const icao = normalizeCode(focusIcao || "");
-      const rIdx = runwayIndexByIcao.get(icao) || null;
-      if(!rIdx) { ensureRunwayIndexForIcao(icao).catch(()=>{}); return null; }
-
-      const f = { cid: String(p.cid), pilot: p, fp, flight_plan: fp };
-      // Wir holen das Ziel (Target), das wir vorher schon (z.B. durch Worker oder ATIS) bestimmt haben
-      const tgt = getRunwayTargetForFlight(f, rIdx, globalActiveRunways[icao]);
-      
-      // Wenn wir kein Ziel haben, können wir kein valides Lineup bestimmen
-      if(!tgt) return null;
-
-      const latM = Number(f.rwEntryLateralM);
-      if(!isFinite(latM) || latM > 38) return null; // Hard Filter (Asphalt)
-
+      // Determine max allowed speed for lineup detection.
+      // Standard: 24kts. If we just merged onto axis (rolling lineup), allow up to 38kts
+      // to catch the turn before the takeoff acceleration spikes GS.
+      // Note: We check specific conditions below before applying the loose limit.
       const gs = Number(p.groundspeed || 0);
-      if(gs > 48) return null; 
+      const limitGs = LINEUP_GS_MAX_KTS + 14;
+      if(!isFinite(gs) || gs > limitGs) return null;
 
-      const planeHdg = Number(p.heading || 0);
-      
-      // Gezielter Check gegen DIE Runway, die wir als Ziel ermittelt haben (tgt.designator)
-      // Das verhindert, dass wir auf der 18 stehen, aber "Lineup 36" anzeigen.
-      
-      // Umrechnung Designator (z.B. "18") in Heading (180)
-      const rwyNum = parseInt(tgt.designator.substring(0, 2), 10);
-      const rwyHdg = rwyNum * 10;
-      
-      // Winkel-Check (Heading muss grob in Startrichtung zeigen, +/- 40 Grad)
-      // Wir erlauben KEINEN Backtrack-Winkel (180 Grad falsch) hier.
-      const diff = Math.abs(angleDiffDeg(planeHdg, rwyHdg));
-      
-      if (diff > 40) {
-          // Wir stehen zwar auf dem Asphalt, schauen aber in die falsche Richtung oder quer.
-          // Das ist KEIN Lineup für DIESE Runway.
-          return null; 
+    // 1. HOT ZONE LOGIC (Pre-Calculated Lineup Segments)
+    // This handles long taxiways and complex intersections correctly.
+    const hotZones = hotZoneIndexByIcao.get(normalizeCode(focusIcao));
+    if(hotZones){
+      for(const zone of hotZones){
+        // Simple Distance Check to the Lineup Segment (Holding Point <-> Runway Intersection)
+        const proj = projectPointToSegment(lat, lon, zone.hpLat, zone.hpLon, zone.intLat, zone.intLon);
+
+        // Inside the HotZone? (Buffer e.g. 25m lateral to the line)
+        if(proj.dist <= HOTZONE_DIST_M){
+           const planeHdg = Number(p.heading || 0);
+
+           console.log(`[HOTZONE @ ${focusIcao}] ${p.callsign} near ${zone.rwyDes}: Dist=${proj.dist.toFixed(1)}m (Max ${HOTZONE_DIST_M}), t=${proj.t.toFixed(2)}, HdgDiff=${diffDebug.toFixed(1)}°`);
+
+           // Logic: Angle Difference to Runway
+           const diff = angleDiffDeg(planeHdg, zone.rwyHdg);
+           const diffOpp = angleDiffDeg(planeHdg, (zone.rwyHdg + 180) % 360);
+           const align = Math.min(diff, diffOpp);
+
+           // CROSSING: Heading is roughly perpendicular (+/- 45 deg to 90) -> 45..135 deg off axis
+           // Actually, simpler: if alignment is > 45, it is NOT a lineup.
+           if(align > 45){
+             // It's a Crossing -> Status remains TAXI (return null)
+             console.log(`   -> Rejected: Crossing angle (${align.toFixed(1)}°)`);
+             return null;
+           }
+
+           // LINEUP: Heading approximates Runway (< 30 deg)
+           if(align < 35 || (proj.t > 0.8 && align < 50)){
+                         console.log(`   -> MATCH! Lineup detected on ${zone.rwyDes}`);
+             return zone.rwyDes;
+           }
+        }
+      }
+    }
+
+    // Fallback: Existing Logic (Runway Proximity + Axis)
+    // This handles cases where HotZone pre-calc might miss (e.g. backtracking)
+
+
+      const icao = normalizeCode(focusIcao || "");
+      if(!icao) return null;
+
+      const rIdx = runwayIndexByIcao.get(icao) || null;
+      if(!rIdx){
+        // kick async load (non-blocking); next refresh will have it
+        ensureRunwayIndexForIcao(icao).catch(()=>{});
+        return null;
       }
 
-      // Wenn wir hier sind: Wir stehen auf der Bahn UND schauen in die richtige Richtung.
+      // Build a minimal flight wrapper for the runway targeting logic
+      const f = {
+        cid: String(p.cid),
+        pilot: p,
+        fp,
+        flight_plan: fp,
+        aircraft: fp?.aircraft_short || fp?.aircraft || ""
+      };
+      const tgt = getRunwayTargetForFlight(f, rIdx, globalActiveRunways[icao]);
+      if(!tgt) return null;
+
+      // Check Standard Speed Limit unless we have strong "Just Merged" signal
+      if (!tgt.rwJustMergedOntoAxis && gs > LINEUP_GS_MAX_KTS) return null;
+
+      // Must be tightly on runway axis.
+      // NOTE: Do NOT rely on f.rwOnAxisTight here (it intentionally excludes runway ends via proj.t > 0.03),
+      // which caused missed lineups close to the threshold.
+      const latM = Number(f.rwEntryLateralM);
+      if(!isFinite(latM) || latM > LINEUP_ON_AXIS_M) return null;
+
+      // Direction check with robust fallback:
+      // - Prefer "takeoff direction away from threshold" (f.rwTrackAway)
+      // - If heading is noisy and we are very close to the threshold, accept aligned-in-either-direction.
+      const axisBrg = Number(f.rwAxisBrg);
+      const trackBrg = Number(f.rwTrackBrg);
+      const nearThr = isFinite(f.rwDistM) ? (Number(f.rwDistM) <= 180) : false;
+      if(!f.rwTrackAway){
+        if(!(isFinite(axisBrg) && isFinite(trackBrg))) return null;
+        const dA = angleDiffDeg(trackBrg, axisBrg);
+        const dO = angleDiffDeg(trackBrg, (axisBrg + 180) % 360);
+        const alignedEither = Math.min(dA, dO) <= ETD_ON_RUNWAY_ALIGN_DEG;
+        if(!(nearThr && alignedEither)) return null;
+      }
+
+      // Only return valid runway designators for display; otherwise fall back to generic LINEUP.
       const desNorm = normalizeRunwayDesignator(tgt.designator);
       return desNorm || true;
-
-    }catch(e){
+    }catch{
       return null;
     }
   }
-  
   function markTakeoff(cid){
     const now = Date.now();
     takeoffMem.set(String(cid), { until: now + TAKEOFF_HOLD_MS, lastSeen: now });
@@ -6755,40 +6895,24 @@ function fmtRegDate(val) {
     const now = Date.now();
     const sig = `${candidate.phase}|${candidate.rank}|${candidate.text}|${candidate.cls}|${candidate.finished?1:0}`;
     const dwellMs = Math.max(9000, Math.min(45000, Math.round((settings.feedIntervalMs || 15000) * 0.9)));
-    
     let mem = statusMemory.get(key);
     if(!mem){
       mem = { status: candidate, sig, lastChange: now, lastSeen: now, pendSig: null, pendCount: 0 };
       statusMemory.set(key, mem);
       return candidate;
     }
-
-    const curPhase = mem?.status?.phase || "UNK";
-    const newPhase = candidate.phase || "UNK";
-
-    // FIX: Boden -> Luft Transition MUSS sofort passieren (Safety Override)
-    // Verhindert, dass ein fliegendes Flugzeug als TAXI angezeigt wird, nur weil der Stabilizer wartet.
-    if(isGroundPhase(curPhase) && isAirbornePhase(newPhase) && !candidate.finished){
-        mem.status = candidate; mem.sig = sig; mem.lastChange = now; mem.pendSig = null; mem.pendCount = 0;
-        return candidate;
-    }
-
-    // Anti-Jitter Logik für Airborne -> Ground (Landing), um kurzes GPS-Droppen zu verhindern
-    if(curPhase && isAirbornePhase(curPhase) && isGroundPhase(newPhase) && !candidate.finished){
+    const curPhase = mem?.status?.phase || null;
+    if(curPhase && isAirbornePhase(curPhase) && isGroundPhase(candidate.phase) && !candidate.finished){
       return mem.status;
     }
-
     mem.lastSeen = now;
     if(sig === mem.sig){ mem.pendSig = null; mem.pendCount = 0; return mem.status; }
-    
     if(candidate.finished || mem.status.finished){
       mem.status = candidate; mem.sig = sig; mem.lastChange = now; mem.pendSig = null; mem.pendCount = 0;
       return candidate;
     }
-
     const withinDwell = (now - mem.lastChange) < dwellMs;
     const strongerChange = candidate.rank < mem.status.rank;
-    
     if(withinDwell && !strongerChange) return mem.status;
 
     if(mem.pendSig === sig) mem.pendCount++;
@@ -6813,22 +6937,19 @@ function fmtRegDate(val) {
 
   function statusTxt(key, vars){ return t(`status_${key}`, vars); }
 
-function classifyFlight(p, boardType){
+  function classifyFlight(p, boardType){
     const fp = p.flight_plan;
     const dep = normalizeCode(fp?.departure || "");
     const arr = normalizeCode(fp?.arrival || "");
     const focusIcao = normalizeCode(currentAirportIcao || "");
     const depAp = getAirport(dep);
     const arrAp = getAirport(arr);
-    
-    // Telemetrie
     const lat = Number(p.latitude);
     const lon = Number(p.longitude);
-    const alt = Number(p.altitude || 0); // MSL in Feet
+    const alt = Number(p.altitude || 0);
     const gs  = Number(p.groundspeed || 0);
     const hdg = Number(p.heading || 0);
     const nowT = Date.now();
-    
     const prev = prevPilotStates.get(String(p.cid));
     const vr = computeVerticalRateFpm(prev, alt, nowT);
     const absVr = (vr == null) ? null : Math.abs(vr);
@@ -6838,106 +6959,85 @@ function classifyFlight(p, boardType){
     const dDep = (depAp ? haversineNm(lat, lon, depAp.latitude, depAp.longitude) : null);
     const dArr = (arrAp ? haversineNm(lat, lon, arrAp.latitude, arrAp.longitude) : null);
 
-    // --- FIX: ELEVATION / AGL CALCULATION ---
-    // Wir bestimmen die relevante Bodenerhebung basierend auf der Nähe zum Start- oder Ziel-Flughafen.
-    let refElev = 0;
-    
-    // Priorität: Wenn wir nah am Abflugort sind -> dessen Höhe. 
-    // Wenn nah am Ziel -> dessen Höhe.
-    // Sonst 0 (Meeresspiegel).
-    if (dDep !== null && dDep < 50 && depAp?.elevation) {
-        refElev = Number(depAp.elevation);
-    } else if (dArr !== null && dArr < 50 && arrAp?.elevation) {
-        refElev = Number(arrAp.elevation);
-    }
+    // SMART GROUND LOGIC (Elevation Aware)
+    let groundRef = 0;
+    if(depAp && dDep != null && dDep < 15) groundRef = depAp.elevation;
+    else if(arrAp && dArr != null && dArr < 15) groundRef = arrAp.elevation;
 
-    // AGL (Above Ground Level) ist der entscheidende Wert für Phasen
-    const agl = alt - refElev;
-    // ----------------------------------------
+    const isGroundAlt = groundRef > 0 ? (alt < (groundRef + 350)) : (alt < 1500);
 
-    // Pre-calc runway context logic...
+    // Pre-calc runway context if detecting departure (needed for Takeoff Rwy detection)
     let rwCtx = null;
     if(boardType === 'dep' && focusIcao && dep === focusIcao && runwayIndexByIcao.has(focusIcao)){
         rwCtx = getRunwayTargetForFlight({ cid: String(p.cid), pilot: p, fp }, runwayIndexByIcao.get(focusIcao), globalActiveRunways[focusIcao]);
     }
 
-    // --- FIX: GROUND DETECTION ---
-    // Ist am Boden, wenn AGL < 350ft (Toleranz für Druckschwankungen) 
-    // UND Geschwindigkeit < 45kts (Taxi/Slow Roll)
-    // ODER wenn explizite Runway-Logik (rwCtx) sagt, wir rollen auf der Bahn.
-    
-    // Fallback für Flughäfen ohne Höhendaten: < 1500ft MSL
-    const isGroundAltitude = (refElev > 0) ? (agl < 350) : (alt < 1500);
-    
-    let onGround = (gs < 45 && isGroundAltitude);
-
-    if(isGroundAltitude){
-      // Wenn Vertical Rate sehr klein ist -> wahrscheinlich am Boden, auch wenn GS kurz hoch geht (Takeoff Roll)
-      if(absVr != null && absVr < 260 && gs < 200){
+    // Robust on-ground detection:
+    let onGround = (gs < 45 && isGroundAlt);
+    if(isGroundAlt){
+      // If vertical-rate is available and small: treat as ground even at high GS (takeoff/landing roll).
+      if(absVr != null && absVr < 260 && gs < 220){
         onGround = true;
-      } else {
-        // Hysterese: War vorher am Boden und steigt nicht? -> Bleibt am Boden.
+      }else{
+        // If we were ground-alt a moment ago and are not clearly climbing yet, keep ground state (prevents TAXI->DEPARTING flicker).
         const prevAlt = prev ? Number(prev.alt) : null;
-        const prevWasGround = (prevAlt != null) 
-             ? (refElev > 0 ? (prevAlt - refElev < 350) : (prevAlt < 1500))
-             : false;
-             
-        if(prevWasGround && !climbing && gs < 160) onGround = true;
+        const prevGroundAlt = (prevAlt != null && isFinite(prevAlt))
+          ? (groundRef > 0 ? (prevAlt < (groundRef + 350)) : (prevAlt < 1500))
+          : false;
+        if(prevGroundAlt && !climbing && gs < 165) onGround = true;
       }
     }
     const airborne = !onGround;
-    // -----------------------------
 
     const nearDep = (dDep != null && dDep < STATUS_BANDS.NEAR_APT_NM);
     const nearArr = (dArr != null && dArr < STATUS_BANDS.NEAR_APT_NM);
+    // Surface association should be more forgiving than "near" (prevents bad flips on large airports)
     const surfaceDep = (dDep != null && dDep < 15);
     const surfaceArr = (dArr != null && dArr < 15);
+  // Fix for phantom departures:
+  const arrMem = arrActualTimeMem.get(String(p.cid));
+  const recentlyLandedHere = arrMem && arrMem.aldtTs && (nowT - arrMem.aldtTs) < 45 * 60 * 1000; // 45 min grace after landing
 
-    // Fix for phantom departures (unverändert)
-    const arrMem = arrActualTimeMem.get(String(p.cid));
-    const recentlyLandedHere = arrMem && arrMem.aldtTs && (nowT - arrMem.aldtTs) < 45 * 60 * 1000; 
-    if(boardType === "dep" && recentlyLandedHere && arr === focusIcao && dep !== focusIcao) return { phase:"UNK", rank:99, text:"—", cls:"hidden", finished:true };
-    
+  // If tracking as departure, but we know it just landed here AND flight plan hasn't changed (still pointing to this apt as dest), skip.
+  if(boardType === "dep" && recentlyLandedHere && arr === focusIcao && dep !== focusIcao) return { phase:"UNK", rank:99, text:"—", cls:"hidden", finished:true };
+    // Local flight (DEP==ARR==focus): treat ARR-board ground state carefully (avoid immediate "LANDED")
     const isLocalAtFocus = !!(focusIcao && dep === focusIcao && arr === focusIcao);
     const localState = updateLocalFlightState(p.cid, { isLocal: isLocalAtFocus, airborne, onGround });
     p.__isLocal = isLocalAtFocus;
-
     const key = statusKey(p.cid, boardType);
     const prevStable = statusMemory.get(key)?.status || null;
     const prevPhase = prevStable?.phase || null;
-
     const approachBand = (prevPhase === "APPROACH" || prevPhase === "FINAL" || prevPhase === "GOAROUND") ? STATUS_BANDS.APPROACH_EXIT_NM : STATUS_BANDS.APPROACH_ENTER_NM;
     const finalBand = (prevPhase === "FINAL") ? STATUS_BANDS.FINAL_EXIT_NM : STATUS_BANDS.FINAL_ENTER_NM;
     const depBand = (prevPhase === "DEPARTING" || prevPhase === "CLIMB") ? STATUS_BANDS.DEPAREA_EXIT_NM : STATUS_BANDS.DEPAREA_ENTER_NM;
-
     const inApproachZone = (dArr != null && dArr <= approachBand);
     const inFinalZone    = (dArr != null && dArr <= finalBand);
     const inDepZone      = (dDep != null && dDep <= depBand);
-
-    // Cruise Check: Nutzen AGL nur bedingt, eher FL200 als harte Grenze
     const stableCruise = airborne && alt >= 20000 && gs >= 140 && (absVr == null || absVr < 650) && !(inApproachZone);
-
-    // --- FIX: DESCENT LOGIC ---
+    // --- FIX: ROBUSTE SINKFLUG-ERKENNUNG ---
+    // 1. Cruise Altitude aus dem Flugplan lesen
     let cruiseAlt = 30000;
     if (fp && fp.altitude) {
         let a = String(fp.altitude).toUpperCase().replace("FL", "");
         let num = parseInt(a, 10);
         if (num > 0) cruiseAlt = (num < 1000) ? num * 100 : num;
     }
-    // Geometrischer Sinkflug
+    // 2. Geometrischer Sinkflug: Deutlich unter Cruise Alt, nah am Ziel (<200NM), näher am Ziel als am Start, und steigt nicht stark
     const isClimbingModerate = (vr != null && vr > 400);
     const geoDescent = (dArr != null && dArr < 200 && alt < (cruiseAlt - 2000) && !isClimbingModerate && (dDep == null || dArr < dDep));
+    // 3. Aktiv wenn: Physisch sinkend, ODER geometrisch im Sinkflug, ODER Hysterese (war im Sinkflug und steigt nicht)
     const descentActive = (descending || geoDescent || (prevPhase === "DESCENT" && !climbing));
 
-    // --- Logic for Runways / Centerline (unverändert) ---
+    // --- NEW: Runway & Centerline Resolution (Moved Up) ---
+    // Wir berechnen dies VOR dem Status-Check, um "Established on Centerline" für "FINAL" zu nutzen.
     if(boardType === "arr" && airborne && inApproachZone && focusIcao && arr === focusIcao){
         const rIdx = runwayIndexByIcao.get(focusIcao);
         if(!rIdx) ensureRunwayIndexForIcao(focusIcao).catch(()=>{});
         else {
             const active = globalActiveRunways[focusIcao] || null;
+            const elev = arrAp ? (arrAp.elevation || 0) : 0;
             const mockFlight = { pilot: p, id: p.cid };
-            // Hier nutzen wir 'refElev' (Zielhöhe) für den 3D-Trichter
-            const rwyEp = resolveArrivalRunwayForFlight(mockFlight, rIdx, active, dArr, refElev);
+            const rwyEp = resolveArrivalRunwayForFlight(mockFlight, rIdx, active, dArr, elev);
 
             if(rwyEp){
                 p.arrRwyEp = rwyEp;
@@ -6949,45 +7049,84 @@ function classifyFlight(p, boardType){
         }
     }
 
+    // Centerline Stability Check (Min 2 Refreshes established)
     const mem = statusMemory.get(key);
     if(mem && p.__isEstablished) mem.estCount = (mem.estCount || 0) + 1;
     else if(mem) mem.estCount = 0;
     const onCenterlineStable = (mem && mem.estCount >= 1);
 
-    // --- FIX: FINAL / APPROACH ALTITUDES (AGL BASED) ---
-    // Wir berechnen eine "Final Ceiling" basierend auf Distanz (3 Grad Gleitpfad + Puffer)
-    // Faustregel: 300ft pro NM. Bei 10NM sind wir bei 3000ft AGL.
-    const glidePathAgl = (dArr != null) ? (dArr * 320 + 1000) : 5000;
+    const finalCeiling = dArr != null ? Math.max(1800, Math.min(9500, dArr*330 + 1100)) : 5000;
+    // FIX: FINAL Status triggert nun auch, wenn wir stabil auf der Extended Centerline sind (Geo-Lock)
 
-    const finalOk = airborne && gs >= 80 && (
-        (inFinalZone && agl <= glidePathAgl && (descending || (vr != null && vr < -200) || agl <= 3500))
+        const finalOk = airborne && gs >= 80 && (
+        (inFinalZone && alt <= finalCeiling && (descending || (vr != null && vr < -200) || alt <= 3500))
         ||
-        (onCenterlineStable && dArr < 18 && agl < 6000) 
+        (onCenterlineStable && dArr < 18 && alt < 6000) // Extended Centerline Capture (bis 18NM)
     );
 
+    // FIX: Realistischerer Approach-Trigger
+    // Neu: Kombination aus Höhe UND Geschwindigkeit.
     const approachOk = airborne && inApproachZone && gs >= 80 && (
-        // A: Klassisch tief (AGL < 9500)
-        agl <= 9500
+        // A: Klassischer Anflugsektor (tief genug)
+        alt <= 9500
         ||
-        // B: STAR / Vectoring (AGL < 14000 & Speed reduziert)
-        (agl <= 14000 && gs <= 280)
+        // B: STAR / Vectoring (mittelhoch, aber Speed reduziert < 280kts)
+        (alt <= 14000 && gs <= 280)
         ||
-        // C: High Energy Capture (sehr nah, aber noch hoch)
-        (dArr != null && dArr <= 18 && agl <= 17000)
+        // C: High Energy Capture (sehr nah < 18NM, da darf man auch noch höher sein)
+        (dArr != null && dArr <= 18 && alt <= 17000)
     );
 
-    // --- FIX: GO AROUND (AGL BASED) ---
+// --- GO-AROUND OPTIMIERUNG ---
+
+    // 1. Kontext: War der Flug vorher schon stabil im Anflug?
+    // FIX: Nur wenn er wirklich nah war (< 12 NM) oder bereits im FINAL Status war.
+    // Das verhindert False-Positives bei Starts von nahen Flughäfen (z.B. EDKF -> EDDF),
+    // die zwar in der Approach-Zone (45NM) sind und steigen, aber nie einen Anflug versucht haben.
     const wasInFinal = (prevPhase === "FINAL");
     const wasDeepInApproach = (prevPhase === "APPROACH" && dArr != null && dArr < 12);
-    const isClimbingStrong = (vr != null && vr > 800); 
-    const isLowEnough = (agl < 6000); // Nur Go-Around wenn wir tief waren
 
+    // 2. Energie: Steigt er signifikant? (Rauschen filtern)
+    const isClimbingStrong = (vr != null && vr > 800); // min 800 fpm
+
+    // 3. Höhe: Ist er tief genug für einen Go-Around? (AGL Logik)
+    // Wir nutzen arrAp.elevation wenn verfügbar, sonst 0.
+    const destElev = arrAp ? (arrAp.elevation || 0) : 0;
+    const agl = alt - destElev;
+    const isLowEnough = (agl < 6000);
+
+    // Entscheidung:
+    // A) Wir sind bereits im GOAROUND -> Status halten solange wir steigen/nicht zu hoch sind
+    // B) Wir waren im Approach/Final -> Trigger NUR bei starkem Steigen + tiefer Höhe
     const goAroundOk =
         (prevPhase === "GOAROUND" && climbing && agl < 10000) ||
         ((wasInFinal || wasDeepInApproach) && isClimbingStrong && isLowEnough && inApproachZone && gs >= 90);
 
+    // FIX: If a Go-Around is detected, we MUST reset any "Landed" state immediately to show ETA again.
     if(goAroundOk && boardType === "arr"){
         updateArrActualTimesForPilot(p, { reset: true });
+    }
+
+    // NEW: Attempt to resolve specific arrival runway for Status Text & Precise ETA
+    if(boardType === "arr" && airborne && inApproachZone && focusIcao && arr === focusIcao){
+        const rIdx = runwayIndexByIcao.get(focusIcao);
+        if(!rIdx) ensureRunwayIndexForIcao(focusIcao).catch(()=>{});
+        else {
+            const active = globalActiveRunways[focusIcao] || null;
+            // Call with dArr (distance in NM) and Destination Elevation (for AGL check)
+            const elev = arrAp ? (arrAp.elevation || 0) : 0;
+                // FIX: Wrapper mit ID für die Queue-Logik
+            const mockFlight = { pilot: p, id: p.cid };
+
+            const rwyEp = resolveArrivalRunwayForFlight(mockFlight, rIdx, active, dArr, elev);
+            if(rwyEp){
+                p.arrRwyEp = rwyEp;
+                p.arrRwyDes = rwyEp.designator;
+            } else {
+                p.arrRwyEp = null;
+                p.arrRwyDes = null;
+            }
+        }
     }
 
     function divertText(){
@@ -6999,8 +7138,8 @@ function classifyFlight(p, boardType){
       return statusTxt("on_ground_unknown");
     }
 
-    // Departure Lineup Detection (unverändert)
-    let depLineupHeld = null; 
+    // Pre-compute departure lineup hint (used to render "LINEUP RWY xx" instead of plain TAXI).
+    let depLineupHeld = null; // string designator | true | null
     if(boardType === "dep" && onGround && focusIcao && dep === focusIcao){
       const rwy = detectDepartureLineupRwy(p, fp, focusIcao);
       if(rwy){
@@ -7012,160 +7151,240 @@ function classifyFlight(p, boardType){
       }
     }
 
-    // --- GATE / TAXI LOGIC (unverändert) ---
-    let gateLabel = null;
-    let gateIcaoForThis = null;
-    let groundState = null; 
-    let taxiInfo = null;
+let gateLabel = null;
+let gateIcaoForThis = null;
+let groundState = null; // { isStationary, taxiSure, uncertain }
+let taxiInfo = null;
 
-    try{
-      const focusIcao = currentAirportIcao;
-      if(onGround){
-        if(boardType === "dep" && dep === focusIcao && surfaceDep){
-          gateIcaoForThis = focusIcao;
-        }else if(boardType === "arr" && arr === focusIcao){
-          if(surfaceArr){
-            gateIcaoForThis = focusIcao; 
-          }else if(surfaceDep){
-            gateIcaoForThis = dep;
-          }
-        }
-      }
-      if(gateIcaoForThis){
-        const idx = gateIndexByIcao.get(gateIcaoForThis) || null;
-        if(idx){
-          const r = resolveGateForCid(p.cid, lat, lon, gs, idx, gateIcaoForThis);
-          gateLabel = r?.gate ? r.gate.label : null;
-          groundState = r?.ground || null;
-        }else{
-          ensureGateIndexForIcao(gateIcaoForThis).catch(()=>{});
-          const r = resolveGateForCid(p.cid, lat, lon, gs, null, gateIcaoForThis);
-          gateLabel = r?.gate ? r.gate.label : null;     
-          groundState = r?.ground || null;
-        }
-      }
-    }catch{}
+try{
+  const focusIcao = currentAirportIcao;
 
-    try{
-      if(onGround && gateIcaoForThis && isFinite(lat) && isFinite(lon) && isFinite(gs)){
-        const tIdx = taxiwayIndexByIcao.get(gateIcaoForThis) || null;
-        if(!tIdx){
-          ensureTaxiwayIndexForIcao(gateIcaoForThis).catch(()=>{});
-        }
-        taxiInfo = resolveTaxiStatusForCid(
-          p.cid, lat, lon, gs,
-          { onGround, isStationary: !!groundState?.isStationary, taxiSure: !!groundState?.taxiSure },
-          tIdx, gateIcaoForThis
-        );
+  // Welche Airport-Gates sollen wir matchen?
+  if(onGround){
+    if(boardType === "dep" && dep === focusIcao && surfaceDep){
+      gateIcaoForThis = focusIcao; // Departures: Gate am Fokus-Airport
+    }else if(boardType === "arr" && arr === focusIcao){
+      if(surfaceArr){
+        gateIcaoForThis = focusIcao; // Arrivals: Gate am Ziel (Fokus)
+      }else if(surfaceDep){
+        gateIcaoForThis = dep;       // Arrivals: noch am Origin → Gate am Origin
       }
-    }catch{}
+    }
+  }
 
-    if(boardType === "arr"){
+  if(gateIcaoForThis){
+    const idx = gateIndexByIcao.get(gateIcaoForThis) || null;
+if(idx){
+  const r = resolveGateForCid(p.cid, lat, lon, gs, idx, gateIcaoForThis);
+  gateLabel = r?.gate ? r.gate.label : null;
+  groundState = r?.ground || null;
+}else{
+  // async laden, nächster Refresh hat Gate-Daten
+  ensureGateIndexForIcao(gateIcaoForThis).catch(()=>{});
+  // trotzdem Samples weiter füttern (für Stationary/Hysterese + Cache-Gate)
+  const r = resolveGateForCid(p.cid, lat, lon, gs, null, gateIcaoForThis);
+  gateLabel = r?.gate ? r.gate.label : null;       // wichtig: Cache-Gate kann schon da sein
+  groundState = r?.ground || null;
+}
+  }else{
+    // Samples weiterführen, wenn wir “fast” am Airport sind (gegen Flattern)
+    if(onGround){
+      const keepIcao =
+        (dep === focusIcao && dDep != null && dDep < 3) ? focusIcao :
+        (arr === focusIcao && dArr != null && dArr < 3) ? focusIcao :
+        null;
+      if(keepIcao){
+        const idx = gateIndexByIcao.get(keepIcao) || null;
+        resolveGateForCid(p.cid, lat, lon, gs, idx, keepIcao);
+      }
+    }
+  }
+}catch{}
+
+// Taxiway-based taxi logic (with fallback/hysteresis)
+try{
+  if(onGround && gateIcaoForThis && isFinite(lat) && isFinite(lon) && isFinite(gs)){
+    const tIdx = taxiwayIndexByIcao.get(gateIcaoForThis) || null;
+    if(!tIdx){
+      // async load, fallback will still work via "moving-on-ground" confirm
+      ensureTaxiwayIndexForIcao(gateIcaoForThis).catch(()=>{});
+    }
+    taxiInfo = resolveTaxiStatusForCid(
+      p.cid,
+      lat, lon, gs,
+      { onGround, isStationary: !!groundState?.isStationary, taxiSure: !!groundState?.taxiSure },
+      tIdx,
+      gateIcaoForThis
+    );
+  }else{
+    // still keep TTL state around
+    const m = taxiMem.get(String(p.cid));
+    if(m) m.lastSeen = Date.now();
+  }
+}catch{}
+
+    // Arrivals: update ALDT/AIBT memory using the already computed gate/ground hints.
+    // - "landed" when onGround + surfaceArr at focus airport
+    // - "in-block" when stationary at a resolved gate (position)
+ if(boardType === "arr"){
       const focus = normalizeCode(currentAirportIcao || "");
       if(focus && arr === focus){
         const landedHere = !!(onGround && surfaceArr && (!isLocalAtFocus || localState?.hasAirborne));
-        const inBlockHere = landedHere && !!groundState?.isStationary && !!gateLabel && !groundState?.taxiSure && !taxiInfo?.taxiActive;
-        const shouldReset = airborne || (onGround && !surfaceArr);
-        updateArrActualTimesForPilot(p, { isLandedAtFocus: landedHere, isInBlockAtFocus: inBlockHere, reset: shouldReset });
+        const inBlockHere =
+          landedHere &&
+          !!groundState?.isStationary &&
+          !!gateLabel &&
+          !groundState?.taxiSure &&
+          !taxiInfo?.taxiActive;
+
+        // --- FIX: Safety Reset ---
+                const shouldReset = airborne || (onGround && !surfaceArr);
+
+        updateArrActualTimesForPilot(p, {
+            isLandedAtFocus: landedHere,
+            isInBlockAtFocus: inBlockHere,
+            reset: shouldReset
+        });
       }
     }
 
-    // --- STATUS ENTSCHEIDUNGEN ---
     let cand = { phase:"UNK", rank:99, text:"—", cls:"info", finished:false };
 
     if(boardType === "dep"){
       if(p.__prefile) cand = { phase:"PREFILE", rank:0, text: statusTxt("prefile"), cls:"info", finished:false };
-      else if(onGround && surfaceDep){
-        // ... (Taxi/Gate Logic unverändert) ...
-        const tm = taxiInfo?.mem || taxiMem.get(String(p.cid)) || null;
-        if(tm){
-           const gateHoldOk = !!groundState?.isStationary && !!gateLabel && isFinite(gs) && gs <= (STATIONARY_MAX_GS_KTS + 1.5);
-           if(gateHoldOk){
-             if(!tm.gateHoldSince) tm.gateHoldSince = nowT;
-             if((nowT - tm.gateHoldSince) >= DEP_TAXI_GATE_RESET_MS){
-               tm.depTaxiUntil = 0; tm.lastTaxiTs = 0; tm.taxiStickyUntil = 0; tm.taxiSince = 0;
-             }
-           }else{ tm.gateHoldSince = 0; }
-        }
-        const rolling = isFinite(gs) && gs >= DEP_TAXI_ROLLING_GS_KTS;
-        const taxiLatched = !!(tm && ((tm.depTaxiUntil && tm.depTaxiUntil > nowT) || (tm.lastTaxiTs && (nowT - tm.lastTaxiTs) < DEP_TAXI_LATCH_MS)));
-        const taxiActive = rolling || !!groundState?.taxiSure || !!taxiInfo?.taxiActive || taxiLatched;
-        if(tm && taxiActive){ tm.depTaxiUntil = nowT + DEP_TAXI_LATCH_MS; }
-        const atGateSure = !!groundState?.isStationary && !!gateLabel && !taxiActive;
+else if(onGround && surfaceDep){
+  const tm = taxiInfo?.mem || taxiMem.get(String(p.cid)) || null;
 
-        if(taxiActive){
-           cand = { phase:"TAXI", rank:0, text: statusTxt("taxi"), cls:"info", finished:false };
-        }else{
-           if(atGateSure && tm){ tm.wasAtGate = true; tm.gateLat = lat; tm.gateLon = lon; }
-           const txt = atGateSure ? statusTxt("gate_named", { gate: gateLabel }) : (gateLabel ? statusTxt("gate_named", { gate: gateLabel }) : statusTxt("gate_plain"));
-           cand = { phase:"GATE", rank:0, text: txt, cls:"info", finished:false };
-        }
+  // If we're clearly parked at a gate for a while, release any prior taxi latch.
+  // This allows "pushback abort" or "back to stand" to return to GATE reliably.
+  if(tm){
+    const gateHoldOk = !!groundState?.isStationary && !!gateLabel && isFinite(gs) && gs <= (STATIONARY_MAX_GS_KTS + 1.5);
+    if(gateHoldOk){
+      if(!tm.gateHoldSince) tm.gateHoldSince = nowT;
+      if((nowT - tm.gateHoldSince) >= DEP_TAXI_GATE_RESET_MS){
+        tm.depTaxiUntil = 0;
+        tm.lastTaxiTs = 0;
+        tm.taxiStickyUntil = 0;
+        tm.taxiSince = 0;
       }
+    }else{
+      tm.gateHoldSince = 0;
+    }
+  }
+
+  // "Rolling" must always win over "at gate" to avoid Taxi <-> Gate flapping.
+  const rolling = isFinite(gs) && gs >= DEP_TAXI_ROLLING_GS_KTS;
+
+  // Long latch through stop-and-go queues until takeoff (unless explicitly parked at a gate as above).
+  const taxiLatched = !!(tm && (
+    (tm.depTaxiUntil && tm.depTaxiUntil > nowT) ||
+    (tm.lastTaxiTs && (nowT - tm.lastTaxiTs) < DEP_TAXI_LATCH_MS)
+  ));
+
+  const taxiActive = rolling || !!groundState?.taxiSure || !!taxiInfo?.taxiActive || taxiLatched;
+
+  // Extend latch while taxiing (covers long queues even with intermittent low GS or stops).
+  if(tm && taxiActive){
+    tm.depTaxiUntil = nowT + DEP_TAXI_LATCH_MS;
+  }
+
+  const atGateSure = !!groundState?.isStationary && !!gateLabel && !taxiActive;
+
+  if(taxiActive){
+    cand = { phase:"TAXI", rank:0, text: statusTxt("taxi"), cls:"info", finished:false };
+  }else{
+    // Flag flight as "Started at Gate" for Taxi History recording
+    if(atGateSure && tm){
+       tm.wasAtGate = true;
+       tm.gateLat = lat;
+       tm.gateLon = lon;
+    }
+    const txt = atGateSure
+      ? statusTxt("gate_named", { gate: gateLabel })
+      : (gateLabel ? statusTxt("gate_named", { gate: gateLabel }) : statusTxt("gate_plain"));
+    cand = { phase:"GATE", rank:0, text: txt, cls:"info", finished:false };
+  }
+}
       else if(airborne && nearDep){
+        // Optional Takeoff status: if we were taxiing for a while, and now speed/alt increase
         const tm = taxiInfo?.mem || taxiMem.get(String(p.cid)) || null;
-        const fromTaxiRecently = tm && tm.lastTaxiTs && (nowT - tm.lastTaxiTs) <= TAKEOFF_FROM_TAXI_GRACE_MS && tm.taxiSince && (nowT - tm.taxiSince) >= TAKEOFF_TAXI_MIN_MS;
-        
-        // Runway Context Analyse
+        const agl = (groundRef > 0) ? (alt - groundRef) : alt;
+        const fromTaxiRecently =
+          tm && tm.lastTaxiTs && (nowT - tm.lastTaxiTs) <= TAKEOFF_FROM_TAXI_GRACE_MS &&
+          tm.taxiSince && (nowT - tm.taxiSince) >= TAKEOFF_TAXI_MIN_MS;
+
+        // If > 60kts on runway -> TAKEOFF.
         const onRunwayStrong = !!(rwCtx && (rwCtx.rwOnAxisStrict || rwCtx.rwRollingOnAxis));
-        const aligned = rwCtx && rwCtx.rwTrackAlignedAxis; 
+        const highSpeedTakeoff = onRunwayStrong && gs > 60;
 
-        // --- TAKEOFF LOGIC VERBESSERT ---
-        
-        // 1. High Speed Takeoff (Eindeutig)
-        const highSpeedTakeoff = onRunwayStrong && gs > 55;
-
-        // 2. Rolling Takeoff / Acceleration Gap (Die "tote Zone" 25-55kts)
-        // Wenn wir auf der Bahn sind, ausgerichtet sind und schneller als Taxi-Speed (>25kts)
-        // ODER deutlich beschleunigen.
+        // High-Speed Entry Logic (>30kts, aligned, accelerating)
+        // If entering >30kts, we want LINEUP, *unless* accelerating for takeoff.
         const accel = (prev && isFinite(prev.gs)) ? (gs - prev.gs) : 0;
-        const rollingTakeoff = onRunwayStrong && aligned && gs > 25 && (accel > 1 || gs > 35);
-
-        // 3. Normaler Takeoff aus Historie
-        const standardTakeoff = fromTaxiRecently &&
-            agl >= 0 && agl <= TAKEOFF_MAX_AGL_FT &&
+        const aligned = rwCtx && rwCtx.rwTrackAlignedAxis; // < 35 deg deviation
+        const fastTakeoffEntry = onRunwayStrong && gs > 30 && aligned && (accel > 0.5 || fromTaxiRecently);
+                const takeoffOk =
+                 highSpeedTakeoff ||
+          fastTakeoffEntry ||
+          (
+            fromTaxiRecently &&
+            isFinite(agl) && agl >= 0 && agl <= TAKEOFF_MAX_AGL_FT &&
             isFinite(gs) && gs >= TAKEOFF_GS_KTS &&
-            (climbing || (vr != null && vr > 200) || agl > 80);
+            (climbing || (vr != null && vr > 200) || agl > 80)
+          );
 
-        const takeoffOk = highSpeedTakeoff || rollingTakeoff || standardTakeoff;
+        // Also trigger TAKEOFF when we JUST transitioned from TAXI (even if nearDep is noisy)
+        const memEntry = statusMemory.get(key) || null;
+        const prevTaxiRecently =
+          (prevPhase === "TAXI") &&
+          memEntry?.lastChange &&
+          (nowT - memEntry.lastChange) <= (2.5 * 60 * 1000) &&
+          isFinite(agl) && agl >= 0 && agl <= (TAKEOFF_MAX_AGL_FT + 900) &&
+          isFinite(gs) && gs >= 60 &&
+          (climbing || (vr != null && vr > 120) || agl > 120);
+
         const held = isTakeoffHeld(p.cid);
-        
-        if(takeoffOk || held){
-          if(takeoffOk) markTakeoff(p.cid);
-          
+        if(takeoffOk || prevTaxiRecently || held){
+          if(takeoffOk || prevTaxiRecently) markTakeoff(p.cid);
+          // Try to determine the specific runway for the status text
+          // 1. Live position on runway axis?
+          // 2. Previously detected lineup?
           let rwyName = null;
-          if(rwCtx && rwCtx.designator) rwyName = rwCtx.designator;
-          // Fallback Memory
-          if(!rwyName && isTakeoffHeld(p.cid)) { const memRwy = getLineupHeld(p.cid); if(memRwy && memRwy !== true) rwyName = memRwy; }
-          // Fallback Backtrack
+          if(rwCtx && (rwCtx.rwOnAxisStrict || rwCtx.rwRollingOnAxis) && rwCtx.designator){
+              rwyName = rwCtx.designator;
+          }
+          if(!rwyName && isTakeoffHeld(p.cid)){
+             const memRwy = getLineupHeld(p.cid); // might retrieve from memory
+             if(memRwy && memRwy !== true) rwyName = memRwy;
+          }
+
+          // BACKTRACK FIX: Wenn wir immer noch keine Runway haben (Refresh Rate Pech),
+          // schauen wir in die Historie der letzten Minuten.
           if (!rwyName && runwayIndexByIcao.has(focusIcao)) {
              const found = backtrackTakeoffRunway(p.cid, runwayIndexByIcao.get(focusIcao));
-             if (found) { rwyName = found; markLineup(p.cid, rwyName); }
+             if (found) {
+                 rwyName = found;
+                 // Optional: Speichern wir das gefundene Ergebnis im LineupMem, damit es stabil bleibt?
+                 markLineup(p.cid, rwyName);
+             }
           }
-          
+
           const txt = rwyName ? statusTxt("takeoff_rwy", { rwy: normalizeRunwayDesignator(rwyName) }) : statusTxt("takeoff");
           cand = { phase:"TAKEOFF", rank:1, text: txt, cls:"warn", finished:false };
-        
-        } else {
-          // Check ob wir vielleicht doch im LINEUP sind (langsam auf der Bahn), 
-          // auch wenn wir "airborne" (d.h. nicht Gate-Logic) sind.
-          // Das passiert, wenn onGround false ist (wg. GPS/Elev Fehler), aber wir geometrisch auf der Bahn sind.
-          if(onRunwayStrong && aligned && gs < 40) {
-             const rwy = rwCtx.designator;
-             cand = { 
-                 phase: "LINEUP", 
-                 rank: 2, 
-                 text: statusTxt("lineup_rwy", { rwy: normalizeRunwayDesignator(rwy) }), 
-                 cls: "info", 
-                 finished: false 
-             };
-             // Lineup merken, falls er gleich Gas gibt
-             markLineup(p.cid, rwy);
-          } else {
-             // Standard Abflug
-             if(agl < 3000) cand = { phase:"DEPARTING", rank:1, text: statusTxt("departing"), cls:"warn", finished:false };
-             else cand = { phase:"CLIMB", rank:1, text: statusTxt("climb"), cls:"warn", finished:false };
-          }
+        }else{
+          // IMPORTANT: avoid "—" between TAXI -> (TAKEOFF/DEPARTING). This branch is hit first,
+          // so we must set a sensible fallback status when the takeoff heuristic doesn't trigger.
+          if(alt < 7000) cand = { phase:"DEPARTING", rank:1, text: statusTxt("departing"), cls:"warn", finished:false };
+          else cand = { phase:"CLIMB", rank:1, text: statusTxt("climb"), cls:"warn", finished:false };
         }
+      }
+      else if(airborne && inDepZone){
+        // If TAKEOFF was shown recently, keep it briefly even if nearDep condition is missed.
+        if(isTakeoffHeld(p.cid)){
+          cand = { phase:"TAKEOFF", rank:1, text: statusTxt("takeoff"), cls:"warn", finished:false };
+        }else{
+        if(alt < 7000) cand = { phase:"DEPARTING", rank:1, text: statusTxt("departing"), cls:"warn", finished:false };
+        else cand = { phase:"CLIMB", rank:1, text: statusTxt("climb"), cls:"warn", finished:false };
+                }
       }
       else if(airborne){
         if(goAroundOk) cand = { phase:"GOAROUND", rank:3, text: statusTxt("goaround"), cls:"warn", finished:false };
@@ -7182,11 +7401,11 @@ function classifyFlight(p, boardType){
         cand = { phase:"FINISHED", rank:4, text: nearArr ? statusTxt("landed_dest") : divertText(), cls: nearArr ? "good" : "bad", finished:true };
       }
     } else {
-      // ARRIVAL BOARD LOGIC
       if(p.__prefile) cand = { phase:"PREFILE", rank:6, text: statusTxt("prefile"), cls:"info", finished:false };
       else if(airborne){
         if(goAroundOk) cand = { phase:"GOAROUND", rank:0, text: statusTxt("goaround"), cls:"warn", finished:false };
         else if(finalOk) {
+             // Enhanced text with Runway
              const txt = p.arrRwyDes ? statusTxt("final") + ` RWY ${normalizeRunwayDesignator(p.arrRwyDes)}` : statusTxt("final");
              cand = { phase:"FINAL", rank:0, text: txt, cls:"warn", finished:false };
         }
@@ -7194,34 +7413,53 @@ function classifyFlight(p, boardType){
              const txt = p.arrRwyDes ? statusTxt("approach") + ` RWY ${normalizeRunwayDesignator(p.arrRwyDes)}` : statusTxt("approach");
              cand = { phase:"APPROACH", rank:0, text: txt, cls:"warn", finished:false };
         }
-        // --- FIX: DEPAREA AGL CHECK ---
-        // Wenn noch nah am Startflughafen und am Steigen -> "Abflugbereich" (z.B. Go-Around am anderen Airport)
-        else if(dDep != null && dDep < depBand && (climbing || agl < 3000)) cand = { phase:"DEPAREA", rank:2, text: statusTxt("deparea"), cls:"info", finished:false };
         else if(descentActive && alt < 30000 && dArr != null && dArr < 200) cand = { phase:"DESCENT", rank:1, text: statusTxt("descent"), cls:"info", finished:false };
         else if(stableCruise) cand = { phase:"CRUISE", rank:1, text: statusTxt("cruise"), cls:"good", finished:false };
+        else if(airborne && dDep != null && dDep < depBand && (climbing || alt < 18000)) cand = { phase:"DEPAREA", rank:2, text: statusTxt("deparea"), cls:"info", finished:false };
         else cand = { phase:"CRUISE", rank:1, text: statusTxt("cruise"), cls:"good", finished:false };
       } else {
-        if(surfaceArr && !(isLocalAtFocus && !localState?.hasAirborne)){
-           cand = { phase:"FINISHED", rank:3, text: gateLabel ? statusTxt("landed_gate", { gate: gateLabel }) : statusTxt("landed"), cls:"good", finished:true };
-        } else if(surfaceDep) {
-           const taxiActive = !!taxiInfo?.taxiActive || !!groundState?.taxiSure;
-           const atGateSure = !!groundState?.isStationary && !taxiActive;
-           let txt;
-           if(taxiActive) txt = statusTxt("taxi");
-           else if(atGateSure) txt = gateLabel ? statusTxt("gate_named_at", { gate: gateLabel, icao: dep }) : statusTxt("gate_plain_at", { icao: dep });
-           else txt = statusTxt("gate");
-           cand = { phase:"GATE", rank:6, text: txt, cls:"info", finished:false };
-        } else {
-           cand = { phase:"FINISHED", rank:3, text: divertText(), cls:"info", finished:true };
-        }
-      }
-    }
+  if(surfaceArr && !(isLocalAtFocus && !localState?.hasAirborne)){
+    // gelandet am Ziel (Fokus)
+    cand = {
+      phase:"FINISHED",
+      rank:3,
+      text: gateLabel ? statusTxt("landed_gate", { gate: gateLabel }) : statusTxt("landed"),
+      cls:"good",
+      finished:true
+    };
+} else if(surfaceDep) {
+  const taxiActive = !!taxiInfo?.taxiActive || !!groundState?.taxiSure;
+  const atGateSure = !!groundState?.isStationary && !taxiActive;
 
+  let txt;
+   if(taxiActive){
+    txt = statusTxt("taxi");
+  }else if(atGateSure){
+    // NUR wenn Gate angezeigt wird: "@ICAO" anhängen (Requirement)
+    txt = gateLabel
+      ? statusTxt("gate_named_at", { gate: gateLabel, icao: dep })
+      : statusTxt("gate_plain_at", { icao: dep }); // <- fallback: "Am Gate @ICAO"
+  }else{
+    txt = statusTxt("gate"); // Fallback: Am Gate / Taxi
+  }
+
+  cand = { phase:"GATE", rank:6, text: txt, cls:"info", finished:false };
+}
+ else {
+    // irgendwo am Boden (divert/unknown)
+    cand = { phase:"FINISHED", rank:3, text: divertText(), cls:"info", finished:true };
+  }
+}
+
+}
     if(boardType === "dep" && onGround && cand && String(cand.phase || "").toUpperCase() === "TAXI"){
       const rwy = depLineupHeld;
       if(rwy){
         cand.phase = "LINEUP";
-        cand.text = (rwy === true) ? statusTxt("lineup") : statusTxt("lineup_rwy", { rwy: rwy });
+        cand.text = (rwy === true)
+          ? statusTxt("lineup")
+          : statusTxt("lineup_rwy", { rwy: rwy });
+        // A subtle visual hint: treat as "info" (keeps TAXI coloring stable if you prefer; safe to override)
         if(cand.cls === "warn") cand.cls = "info";
       }
     }
@@ -7387,7 +7625,7 @@ function computeDynamicEtaTs(f, destAp, phase, targetCoords=null, rwyDes=null, r
     // FIX: Auch wenn dist < 15nm ist, nutzen wir die Trichter-Logik für Zeit, auch wenn noch nicht "Established"
     if (funnelData && (funnelData.isEstablished || funnelData.distNm < 15)) {
         const distNm = funnelData.distNm;
-        
+
         // Short Final: fast linear
         if (distNm < 4) {
              const minutes = (distNm / Math.max(50, gs)) * 60;
@@ -7398,15 +7636,15 @@ function computeDynamicEtaTs(f, destAp, phase, targetCoords=null, rwyDes=null, r
         // Wir gehen davon aus, dass der Pilot von seiner aktuellen Speed (gs)
         // linear auf die Landing Speed (perf.final) abbremst.
         // Formel: t = 2 * d / (v_start + v_end)
-        
+
         // Wir trauen der aktuellen GS sehr stark, kappen sie aber nicht zu hart.
-        let startSpeed = gs; 
+        let startSpeed = gs;
         let targetSpeed = perf.final; // z.B. 140kt für Jets
 
         // Wenn er extrem schnell ist (>250kt), muss er stärker bremsen (dauert länger)
         // Wir nehmen aber als Durchschnittsspeed nicht (250+140)/2, sondern gewichten die aktuelle Speed höher,
         // da VATSIM Piloten oft "hart" bremsen.
-        
+
         let avgSpeed = (startSpeed + targetSpeed) / 2;
 
         // Wenn er näher als 8NM ist, aber noch sehr schnell (>200kt), bestrafen wir das leicht (GoAround Gefahr / langes Ausschweben)
@@ -7426,7 +7664,7 @@ function computeDynamicEtaTs(f, destAp, phase, targetCoords=null, rwyDes=null, r
             const queue = runwayQueues.get(rwyKey); // Runway-Spezifische Queue!
             if (queue && queue.length > 1) {
                 // ... Queue Logik wie gehabt ...
-                // HINWEIS: Hier sicherstellen, dass wir keine pauschale Strafe addieren, 
+                // HINWEIS: Hier sicherstellen, dass wir keine pauschale Strafe addieren,
                 // wenn es parallele Runways sind (wird durch rwyKey gelöst).
             }
         }
@@ -7665,77 +7903,6 @@ function computeDynamicEtaTs(f, destAp, phase, targetCoords=null, rwyDes=null, r
     f.destEtaText = sm != null ? fmtHHMMPlusText(sm) : "—";
   }
 
-function enforceDepartureQueueing(flights) {
-      if (!Array.isArray(flights) || flights.length < 2) return;
-
-      const now = Date.now();
-      const SEPARATION_MS = 90 * 1000; // 90s Staffelung am Boden
-
-      // 1. Gruppieren nach Runway
-      const runways = {};
-      
-      for (const f of flights) {
-          const ph = f.status?.phase;
-          // Nur relevante Phasen
-          if (ph !== 'TAXI' && ph !== 'LINEUP' && ph !== 'GATE') continue;
-          if (f.status?.finished) continue;
-
-          // Runway zuweisen (vom Worker oder Heuristik)
-          let rwy = f.geoRunway || f.rwTarget?.designator || "UNKNOWN";
-          if (rwy === "UNKNOWN") continue;
-
-          if (!runways[rwy]) runways[rwy] = [];
-          runways[rwy].push(f);
-      }
-
-      // 2. Pro Runway sortieren und Zeiten schieben
-      for (const rwyKey in runways) {
-          const queue = runways[rwyKey];
-
-          // Sortierung: Wer ist am nächsten an der Bahn?
-          // (Distanz ist jetzt dank Worker sehr präzise)
-          queue.sort((a, b) => {
-              // Tie-Breaker: Wer schon im Lineup ist, gewinnt immer
-              const pA = (a.status.phase === 'LINEUP') ? 0 : 1;
-              const pB = (b.status.phase === 'LINEUP') ? 0 : 1;
-              if (pA !== pB) return pA - pB;
-
-              return (a.rwTaxiDistM || 9999) - (b.rwTaxiDistM || 9999);
-          });
-
-          // Der "Zug" fährt ab
-          // Der Erste bekommt seine berechnete Zeit (oder Jetzt).
-          // Der Zweite darf FRÜHESTENS 90s nach dem Ersten starten.
-          
-          let lastEtd = now;
-
-          for (let i = 0; i < queue.length; i++) {
-              const f = queue[i];
-              
-              // Seine physikalische Baseline (berechnet in computeEtdForTaxi)
-              let myBaseEtd = f.etdTs || now;
-
-              // Nur wenn wir NAH an der Bahn sind (< 1000m), erzwingen wir die Staffelung.
-              // (Am Gate ist Staffelung egal, da bestimmt der Slot)
-              if ((f.rwTaxiDistM || 9999) < 1000) {
-                  // Er darf nicht vor dem Vorgänger + Separation starten
-                  if (myBaseEtd < (lastEtd + SEPARATION_MS) && i > 0) {
-                      myBaseEtd = lastEtd + SEPARATION_MS;
-                  }
-                  // Er darf auch nicht in der Vergangenheit starten
-                  if (myBaseEtd < now) myBaseEtd = now + 30000;
-              }
-
-              // Update Flight Object
-              f.etdTs = myBaseEtd;
-              f.etdText = fmtHHMMPlusText(myBaseEtd);
-
-              // Merken für den nächsten
-              lastEtd = myBaseEtd;
-          }
-      }
-  }
-
   function applyEtdForDepFlight(f){
     if(!f) return;
     if(f.__prefile) { f.etdTs = null; f.etdText = "—"; return; }
@@ -7755,32 +7922,16 @@ function enforceDepartureQueueing(flights) {
 
 function depDisplayTimeTs(f){
     const phase = f.status?.phase || "UNK";
-    const now = Date.now();
-
-    // 1. HARD OVERRIDE: LINEUP / TAKEOFF
-    // Wenn wir im Lineup stehen, ist die ETD "Jetzt" (bzw. +1 Min Puffer).
-    // Wir ignorieren hier jegliches STD oder alte Berechnungen.
-    if(phase === "LINEUP" || phase === "TAKEOFF"){
-        // Wenn wir schon eine 'etdTs' haben die plausibel ist (nahe Zukunft), nehmen wir die.
-        // Aber sie darf nicht weit in der Zukunft liegen.
-        if(f.etdTs && f.etdTs < (now + 5*60000) && f.etdTs > (now - 2*60000)) return f.etdTs;
-        
-        // Sonst: Jetzt + 1 Minute
-        return now + 60000;
-    }
-
-    // 2. Normal ETD (vom Worker berechnet)
+    // If we have a calculated ETD, prefer it even if phase is momentarily GATE (reload recovery)
     if(f.etdTs != null && isFinite(f.etdTs)) return f.etdTs;
 
-    // 3. Fallback: Gate / Prefile -> STD
-    if(phase === "GATE" || phase === "PREFILE") {
+    // FIX: Auch bei LINEUP wollen wir STD/ETD sehen, nicht die Ankunftszeit
+    if(phase === "GATE" || phase === "PREFILE" || phase === "LINEUP") {
       const ts = f.stdTs ?? null;
-      // Sliding Logic: Wenn STD vorbei ist, schieben wir es mit.
-      if(ts && ts < now) return now + 10 * 60000;
+      // Ground Sliding: If STD is in the past, slide to Now + 10min
+      if(ts && ts < Date.now()) return Date.now() + 10 * 60000;
       return ts;
     }
-    
-    // 4. Default
     return (f.destEtaTs ?? f.etaPlannedTs ?? null);
   }
 
@@ -7891,7 +8042,7 @@ function statusSensibleKey(f, boardType){
 
     return base*1e12 + sub;
   }
-  
+
 function sortFlights(list, {by, dir}, boardType){
     const d = dir || 1;
     const coll = [...list];
@@ -7914,7 +8065,7 @@ function sortFlights(list, {by, dir}, boardType){
       // 1. Harte Trennung: Gelandete/Finished immer nach unten (außer Just Landed)
       const fa = (a.status?.finished && !a.__justLanded) ? 1 : 0;
       const fb = (b.status?.finished && !b.__justLanded) ? 1 : 0;
-      if(fa !== fb) return fa - fb; 
+      if(fa !== fb) return fa - fb;
 
       // 2. SPEZIAL-LOGIK: Arrival Board & Status Sortierung
       // Wir wollen Flüge im FINAL nach Runway gruppieren.
@@ -7930,7 +8081,7 @@ function sortFlights(list, {by, dir}, boardType){
 
               // Erst nach Runway sortieren (String Vergleich)
               if(rwyA !== rwyB) return d * rwyA.localeCompare(rwyB, undefined, {numeric: true});
-              
+
               // Wenn Runway gleich ist -> Nach Zeit (Wer ist zuerst da?)
               const tA = arrDisplayTimeTs(a) ?? 9e15;
               const tB = arrDisplayTimeTs(b) ?? 9e15;
@@ -7939,16 +8090,16 @@ function sortFlights(list, {by, dir}, boardType){
       }
 
       // 3. Normale Sortierung für alles andere
-      const ka = keyFn(a); 
+      const ka = keyFn(a);
       const kb = keyFn(b);
-      
-      if(typeof ka === "number" && typeof kb === "number"){ 
-          if(ka !== kb) return d * (ka - kb); 
+
+      if(typeof ka === "number" && typeof kb === "number"){
+          if(ka !== kb) return d * (ka - kb);
       }
-      else { 
-          const sa = String(ka ?? ""), sb = String(kb ?? ""); 
-          const c = sa.localeCompare(sb, "en", { sensitivity:"base" }); 
-          if(c !== 0) return d * c; 
+      else {
+          const sa = String(ka ?? ""), sb = String(kb ?? "");
+          const c = sa.localeCompare(sb, "en", { sensitivity:"base" });
+          if(c !== 0) return d * c;
       }
 
       // 4. Tie-Breaker: Zeit
@@ -8018,7 +8169,7 @@ function sortFlights(list, {by, dir}, boardType){
       return tr;
     }
 
-	 updateXpCell(td, f){
+         updateXpCell(td, f){
       if(!td) return;
       let pill = td.querySelector(".xpPill");
       if(!pill){
@@ -8078,6 +8229,13 @@ function sortFlights(list, {by, dir}, boardType){
       const isAirborne = isAirbornePhase(phase) || phase === "GOAROUND";
       const isTakeoff = phase === "TAKEOFF";
 
+      // Helper für hh:mm Zeitformatierung
+      const formatRemTime = (mins) => {
+          if (mins < 60) return mins + " Min.";
+          const h = Math.floor(mins / 60);
+          const m = String(mins % 60).padStart(2, '0');
+          return `${h}:${m} h`;
+      };
 
       if (!settings.showProgressBar || isFinished || phase === "PREFILE" || (this.boardType === "arr" && !isAirborne) || (this.boardType === "dep" && phase === "GATE")) {
           progPct = 0;
@@ -8296,7 +8454,7 @@ if(c.altgs){
       tr.__flight = f;
     }
 
-	async render(list){
+        async render(list){
       // Board header count
       const activeCount = list.reduce((n, f) => n + (f?.status?.finished ? 0 : 1), 0);
       const baseTitle = (this.boardType === "dep") ? t("dep_title") : t("arr_title");
@@ -8387,7 +8545,7 @@ if(c.altgs){
           // INVERT: Setze visuell zurück auf alte Position (ohne Transition)
           tr.style.transition = "none";
           tr.style.transform = `translate(${dx}px, ${dy}px)`;
-          
+
           // Wenn sich das Element weit bewegt (> 20px), heben wir es an (z-index)
           // damit es über anderen schwebt und nicht "hindurch" glitcht.
           if(Math.abs(dy) > 20) tr.classList.add("is-moving");
@@ -8397,11 +8555,11 @@ if(c.altgs){
             // Cubic-Bezier passend zum CSS (0.25, 1, 0.5, 1)
             tr.style.transition = "transform 500ms cubic-bezier(0.25, 1, 0.5, 1)";
             tr.style.transform = "";
-            
+
             // Cleanup nach Animation
             const cleanup = () => {
                 tr.classList.remove("is-moving");
-                tr.style.transition = ""; 
+                tr.style.transition = "";
                 tr.removeEventListener("transitionend", cleanup);
             };
             tr.addEventListener("transitionend", cleanup, { once: true });
@@ -8485,7 +8643,7 @@ if(c.altgs){
   }
 
         let pilotMapInstance = null;
-		
+
         async function openPilotModal(f){
    pilotModalOverlay.classList.add("show");
     // Reset Accordion
@@ -9302,11 +9460,11 @@ async function fetchFeed(){
 
     // 3. Process candidates
     // OPTIMIERUNG: "Budget" einführen. Max 2 externe Requests pro 15s Zyklus.
-    let networkBudget = 15; 
+    let networkBudget = 15;
 
     for(const f of targets){
       applyCachedXpIfAvailable(f);
-      
+
       // Update XP cell on ALL boards where this flight might appear
       // (Nur für den aktiven Tab rendern wir das DOM wirklich, siehe Schritt 1)
       for(const boardSet of airportBoards.values()){
@@ -9577,8 +9735,8 @@ async function fetchFeed(){
       if(isDebugRecording && isDebugCycle) flushDebugLog();
 
       requestXpForVisibleFlights();
-	  
-	  // NEU: Queue aufräumen (entfernt Flüge, die nicht mehr da sind oder schon fertig geladen wurden)
+
+          // NEU: Queue aufräumen (entfernt Flüge, die nicht mehr da sind oder schon fertig geladen wurden)
       // Wir sammeln alle aktiven Flüge von allen Boards
       const allActive = [];
       for(const boardSet of airportBoards.values()){
@@ -9587,220 +9745,19 @@ async function fetchFeed(){
       }
       syncPendingQueue(allActive);
 
-	// --- NEU: Worker füttern ---
-    // Wir tun dies nach jedem Feed-Update, da sich Positionen geändert haben
-    feedTaxiWorker(); 
-	
-	// Timestamp parsen für Smart Sync
-      let dataTsMs = null;
-      if (data?.general?.update_timestamp) {
-          const d = new Date(data.general.update_timestamp);
-          if (isFinite(d)) dataTsMs = d.getTime();
-      }
-
-      const ageSec = dataTsMs ? (Date.now() - dataTsMs)/1000 : null;
+      const ageSec = lastFeedTs ? (Date.now() - lastFeedTs.getTime())/1000 : null;
       setFeedStatus({ ok:true, msg:"Feed: OK", ageSec });
-
-      // SMART SYNC TRIGGER
-      scheduleNextRefresh(dataTsMs);
-
     }catch(err){
       console.warn("Feed refresh failed:", err);
       setFeedStatus({ ok:false, msg:"Feed: ERROR", ageSec:null });
       scheduleAirportXpIndexUpdate();
-      
-      // Auch bei Fehler neu planen (nach Standard-Intervall)
-      scheduleNextRefresh(null); 
     }
   }
 
-// --- TAXI WORKER INTEGRATION ---
-  let taxiWorker = null;
-  let geoEtdCache = new Map(); 
-  
-  const workerGraphReady = new Set();   
-  const workerGraphLoading = new Set(); 
-  
-  // FIX: Diese Zeile hat gefehlt und den Crash verursacht:
-  const workerGraphFailures = new Map(); 
-
-  async function initTaxiWorker() {
-      if (!window.Worker) return;
-
-      if (!taxiWorker) {
-          taxiWorker = new Worker('taxitime-worker.js');
-          taxiWorker.onmessage = (e) => {
-              if (e.data.type === 'READY') {
-                  console.log(`[TaxiWorker] Graph built for ${e.data.icao} (${e.data.nodeCount} nodes).`);
-                  workerGraphReady.add(e.data.icao);
-                  workerGraphLoading.delete(e.data.icao);
-                  workerGraphFailures.delete(e.data.icao);
-              } else if (e.data.type === 'RESULT') {
-                  processWorkerResults(e.data.data);
-              }
-          };
-      }
-      
-      const airports = settings.airports || ["EDDB"];
-      for (const rawIcao of airports) {
-          ensureWorkerGraphForAirport(normalizeCode(rawIcao));
-      }
-  }
-
-  async function ensureWorkerGraphForAirport(icao) {
-      if (!taxiWorker) return;
-      if (workerGraphReady.has(icao)) return;
-      if (workerGraphLoading.has(icao)) return;
-
-      const lastFail = workerGraphFailures.get(icao);
-      if (lastFail && (Date.now() - lastFail) < 60000) return; // 1 min Cooldown
-
-      workerGraphLoading.add(icao);
-      console.log(`[TaxiWorker] Starting geometry load for ${icao}...`);
-
-      try {
-          // 1. Daten sicherstellen (Preload)
-          // FIX: Timeout entfernt. Wenn Daten im IDB Cache sind, dauert es vllt 50ms, wenn nicht, lädt er halt.
-          // Wir wollen nicht abbrechen, nur weil der Browser kurz hängt.
-          const [taxiIdx, rwyIdx] = await Promise.all([
-              ensureTaxiwayIndexForIcao(icao),
-              ensureRunwayIndexForIcao(icao)
-          ]);
-
-          if (!taxiIdx || !taxiIdx.segs || !rwyIdx || !rwyIdx.endpoints) {
-              throw new Error("Data incomplete");
-          }
-
-          // Kurzer Break für den Main Thread
-          await new Promise(r => setTimeout(r, 10));
-
-          const flatTaxiArr = new Float32Array(taxiIdx.segs.length * 4);
-          let ptr = 0;
-          for(const s of taxiIdx.segs) {
-              flatTaxiArr[ptr++] = s.lat1;
-              flatTaxiArr[ptr++] = s.lon1;
-              flatTaxiArr[ptr++] = s.lat2;
-              flatTaxiArr[ptr++] = s.lon2;
-          }
-
-          console.log(`[TaxiWorker] Sending geometry for ${icao} (${taxiIdx.segs.length} segs)...`);
-
-          taxiWorker.postMessage({
-              action: 'INIT_GRAPH',
-              payload: { 
-                  icao: icao, 
-                  taxiways: flatTaxiArr, 
-                  runways: rwyIdx.endpoints 
-              }
-          }, [flatTaxiArr.buffer]);
-
-      } catch (e) {
-          console.warn(`[TaxiWorker] Setup failed for ${icao}:`, e.message);
-          workerGraphFailures.set(icao, Date.now());
-          workerGraphLoading.delete(icao);
-      }
-  }
-  
-  function processWorkerResults(results) {
-      const now = Date.now();
-      for (const [cid, res] of Object.entries(results)) {
-          const estimatedTakeoffTime = now + (res.time * 1000);
-          geoEtdCache.set(cid, { 
-              ts: estimatedTakeoffTime, 
-              rwy: res.rwy,
-              dist: res.dist // Distanz speichern!
-          });
-      }
-  }
-
-function feedTaxiWorker() {
-      if (!taxiWorker) return;
-      
-      const allTargets = [];
-      const activeRunwaysMap = {};
-
-      for (const [icao, boardSet] of airportBoards) {
-          if (!workerGraphReady.has(icao)) {
-              ensureWorkerGraphForAirport(icao);
-              continue; 
-          }
-
-          const activeRwys = globalActiveRunways[icao]?.departures || [];
-          if (activeRwys.length > 0) {
-              activeRunwaysMap[icao] = activeRwys;
-          }
-
-          if (boardSet.lastDeps) {
-              const relevant = boardSet.lastDeps.filter(f => 
-                  (f.status.phase === 'GATE' || f.status.phase === 'TAXI' || f.status.phase === 'LINEUP') && 
-                  !f.status.finished && f.pilot
-              ).map(f => ({
-                  cid: String(f.cid),
-                  lat: Number(f.pilot.latitude),
-                  lon: Number(f.pilot.longitude),
-                  gs: Number(f.pilot.groundspeed || 0),
-                  // NEU: Heading übergeben!
-                  hdg: Number(f.pilot.heading || 0), 
-                  depIcao: icao
-              }));
-              allTargets.push(...relevant);
-          }
-      }
-
-      if (allTargets.length === 0) return;
-
-      taxiWorker.postMessage({
-          action: 'CALC',
-          payload: {
-              flights: allTargets,
-              activeRunwaysMap: activeRunwaysMap
-          }
-      });
-  }
-
- let feedTimeout = null; // Statt feedTimer (Interval) nutzen wir Timeout
-
-  function scheduleNextRefresh(lastDataTs) {
-      if(feedTimeout) clearTimeout(feedTimeout);
-      
-      const intervalSetting = settings.feedIntervalMs || 15000;
-      let nextDelay = intervalSetting;
-
-      // SMART SYNC: Versuche, den Rhythmus von VATSIM zu treffen
-      if (lastDataTs) {
-          const now = Date.now();
-          const dataAge = now - lastDataTs; // Wie alt sind die Daten jetzt?
-          
-          const vatsimCycle = 15000;
-          const ageInCycle = dataAge % vatsimCycle; 
-          const timeToNextUpdate = vatsimCycle - ageInCycle;
-          
-          // Wir addieren 1.5 - 3 Sekunden Puffer, um sicher zu sein, dass das File fertig geschrieben ist
-          const buffer = 2000; 
-          const idealDelay = timeToNextUpdate + buffer;
-
-          // Wir nehmen das Minimum aus "User-Setting" und "Smart Sync", 
-          // aber nicht weniger als 5 Sekunden (Spam-Schutz).
-          nextDelay = Math.max(5000, Math.min(intervalSetting, idealDelay));
-          
-          // Falls die Daten URALT sind (> 1 Minute), sofort neu laden (mit Standard-Interval als Fallback)
-          if(dataAge > 60000) nextDelay = 2000;
-      }
-
-      console.log(`[SmartSync] Next refresh in ${(nextDelay/1000).toFixed(1)}s (Data age: ${(lastDataTs ? (Date.now()-lastDataTs)/1000 : 0).toFixed(1)}s)`);
-      
-      feedTimeout = setTimeout(refresh, nextDelay);
-  }
-
   function startLoop(){
-    // Initialer Start sofort
-    // (Refresh plant dann den nächsten Aufruf selbst via scheduleNextRefresh)
-    if(feedTimeout) clearTimeout(feedTimeout);
-    // Runway Info einmalig kicken
-    setTimeout(() => updateAirportRunwayInfo([]), 500); 
-    // Loop starten (falls noch nicht läuft)
-    if(!lastFeedTs) refresh(); 
-    else scheduleNextRefresh(lastFeedTs.getTime());
+    if(feedTimer) clearInterval(feedTimer);
+    feedTimer = setInterval(refresh, settings.feedIntervalMs);
+    setTimeout(() => updateAirportRunwayInfo([]), 500);
   }
 
   function updateUtcClock(){
@@ -9879,10 +9836,6 @@ function feedTaxiWorker() {
     await loadRexRules(); // WICHTIG: Await, damit Rules VOR der ersten Prediction da sind!
 
     await ensureAirportIndex();
-	
-	// --- NEU: Worker starten ---
-    await initTabs(); // Wichtig: initTabs setzt currentAirportIcao
-    initTaxiWorker(); // Fire & Forget (async load)
 
     await loadEtdCache();
     await loadFlightStateCache();
